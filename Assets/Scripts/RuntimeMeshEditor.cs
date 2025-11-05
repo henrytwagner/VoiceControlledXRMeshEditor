@@ -24,17 +24,34 @@ public class RuntimeMeshEditor : MonoBehaviour
     public bool disableCameraInVertexMode = true;
     public bool showLabels = true;
     
+    [Header("Mesh Transformation")]
+    [Tooltip("Keys to toggle transformation modes")]
+    public KeyCode translateKey = KeyCode.M;
+    public KeyCode rotateKey = KeyCode.R;
+    public KeyCode scaleKey = KeyCode.S;
+    public Color transformModeColor = Color.green;
+    public float rotationSensitivity = 0.5f;
+    public float scaleSensitivity = 0.002f;
+    
     [Header("Visual Aids")]
     public bool showEdges = true;
     public Color edgeColor = Color.cyan;
     public bool showInGameView = true; // Show edges in Game view, not just Scene view
     
     // State
+    private enum TransformMode { Vertices, Translate, Rotate, Scale }
+    private TransformMode currentTransformMode = TransformMode.Vertices;
+    
     private EditableMesh.DisplayMode lastMode;
     private int selectedVertexIndex = -1;
     private Renderer selectedRenderer;
     private Color originalColor;
     private Plane dragPlane;
+    private bool isDraggingTransform = false;
+    private Vector3 transformStartPos;
+    private Quaternion transformStartRot;
+    private Vector3 transformStartScale;
+    private Vector2 transformStartMousePos;
     
     void Awake()
     {
@@ -115,8 +132,27 @@ public class RuntimeMeshEditor : MonoBehaviour
         if (targetMesh.mode != EditableMesh.DisplayMode.Vertices)
             return;
         
-        HandleVertexSelection();
-        HandleVertexDrag();
+        // Handle transform mode toggle (only when in editing mode)
+        HandleTransformModeToggle();
+        
+        // Handle different transform modes
+        switch (currentTransformMode)
+        {
+            case TransformMode.Translate:
+                HandleMeshTranslation();
+                break;
+            case TransformMode.Rotate:
+                HandleMeshRotation();
+                break;
+            case TransformMode.Scale:
+                HandleMeshScale();
+                break;
+            case TransformMode.Vertices:
+            default:
+                HandleVertexSelection();
+                HandleVertexDrag();
+                break;
+        }
     }
     
     void OnModeChanged(EditableMesh.DisplayMode newMode)
@@ -136,6 +172,264 @@ public class RuntimeMeshEditor : MonoBehaviour
         else
         {
             Deselect();
+            currentTransformMode = TransformMode.Vertices; // Reset to vertex mode
+            isDraggingTransform = false;
+        }
+    }
+    
+    void HandleTransformModeToggle()
+    {
+        bool translatePressed = false;
+        bool rotatePressed = false;
+        bool scalePressed = false;
+        bool escPressed = false;
+        
+        #if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null)
+        {
+            translatePressed = keyboard.mKey.wasPressedThisFrame;
+            rotatePressed = keyboard.rKey.wasPressedThisFrame;
+            scalePressed = keyboard.sKey.wasPressedThisFrame;
+            escPressed = keyboard.escapeKey.wasPressedThisFrame;
+        }
+        #else
+        translatePressed = Input.GetKeyDown(translateKey);
+        rotatePressed = Input.GetKeyDown(rotateKey);
+        scalePressed = Input.GetKeyDown(scaleKey);
+        escPressed = Input.GetKeyDown(KeyCode.Escape);
+        #endif
+        
+        TransformMode newMode = currentTransformMode;
+        
+        if (translatePressed)
+        {
+            newMode = (currentTransformMode == TransformMode.Translate) ? TransformMode.Vertices : TransformMode.Translate;
+        }
+        else if (rotatePressed)
+        {
+            newMode = (currentTransformMode == TransformMode.Rotate) ? TransformMode.Vertices : TransformMode.Rotate;
+        }
+        else if (scalePressed)
+        {
+            newMode = (currentTransformMode == TransformMode.Scale) ? TransformMode.Vertices : TransformMode.Scale;
+        }
+        else if (escPressed && currentTransformMode != TransformMode.Vertices)
+        {
+            newMode = TransformMode.Vertices;
+        }
+        
+        if (newMode != currentTransformMode)
+        {
+            currentTransformMode = newMode;
+            Deselect(); // Clear vertex selection when switching modes
+            isDraggingTransform = false;
+            
+            string modeName = currentTransformMode switch
+            {
+                TransformMode.Translate => "TRANSLATE",
+                TransformMode.Rotate => "ROTATE",
+                TransformMode.Scale => "SCALE",
+                _ => "VERTICES"
+            };
+            Debug.Log($"[RuntimeMeshEditor] Switched to {modeName} mode");
+        }
+    }
+    
+    void HandleMeshTranslation()
+    {
+        if (editCamera == null)
+            return;
+        
+        bool clickPressed = false;
+        bool clickHeld = false;
+        bool clickReleased = false;
+        
+        #if ENABLE_INPUT_SYSTEM
+        Mouse mouse = Mouse.current;
+        if (mouse != null)
+        {
+            clickPressed = mouse.leftButton.wasPressedThisFrame;
+            clickHeld = mouse.leftButton.isPressed;
+            clickReleased = mouse.leftButton.wasReleasedThisFrame;
+        }
+        #else
+        clickPressed = Input.GetMouseButtonDown(0);
+        clickHeld = Input.GetMouseButton(0);
+        clickReleased = Input.GetMouseButtonUp(0);
+        #endif
+        
+        if (clickPressed && !isDraggingTransform)
+        {
+            // Start dragging
+            isDraggingTransform = true;
+            transformStartPos = targetMesh.transform.position;
+            
+            #if ENABLE_INPUT_SYSTEM
+            Vector2 mousePos = Mouse.current?.position.ReadValue() ?? Vector2.zero;
+            #else
+            Vector2 mousePos = Input.mousePosition;
+            #endif
+            transformStartMousePos = mousePos;
+        }
+        
+        if (clickReleased && isDraggingTransform)
+        {
+            // Stop dragging
+            isDraggingTransform = false;
+        }
+        
+        if (isDraggingTransform && clickHeld)
+        {
+            // Calculate mouse movement in screen space
+            #if ENABLE_INPUT_SYSTEM
+            Vector2 currentMousePos = Mouse.current?.position.ReadValue() ?? Vector2.zero;
+            #else
+            Vector2 currentMousePos = Input.mousePosition;
+            #endif
+            
+            Vector2 mouseDelta = currentMousePos - transformStartMousePos;
+            
+            // Convert screen delta to world movement
+            // Use camera's right/up vectors for movement
+            Vector3 right = editCamera.transform.right;
+            Vector3 up = editCamera.transform.up;
+            
+            // Scale based on distance from camera
+            float distance = Vector3.Distance(editCamera.transform.position, targetMesh.transform.position);
+            float sensitivity = distance * 0.001f; // Adjust sensitivity as needed
+            
+            // Fixed: Remove the negative sign for Y movement (mouse up = object up)
+            Vector3 worldDelta = (right * mouseDelta.x + up * mouseDelta.y) * sensitivity;
+            
+            // This modifies the actual GameObject Transform, not individual vertices
+            targetMesh.transform.position = transformStartPos + worldDelta;
+        }
+    }
+    
+    void HandleMeshRotation()
+    {
+        if (editCamera == null)
+            return;
+        
+        bool clickPressed = false;
+        bool clickHeld = false;
+        bool clickReleased = false;
+        
+        #if ENABLE_INPUT_SYSTEM
+        Mouse mouse = Mouse.current;
+        if (mouse != null)
+        {
+            clickPressed = mouse.leftButton.wasPressedThisFrame;
+            clickHeld = mouse.leftButton.isPressed;
+            clickReleased = mouse.leftButton.wasReleasedThisFrame;
+        }
+        #else
+        clickPressed = Input.GetMouseButtonDown(0);
+        clickHeld = Input.GetMouseButton(0);
+        clickReleased = Input.GetMouseButtonUp(0);
+        #endif
+        
+        if (clickPressed && !isDraggingTransform)
+        {
+            isDraggingTransform = true;
+            transformStartRot = targetMesh.transform.rotation;
+            
+            #if ENABLE_INPUT_SYSTEM
+            Vector2 mousePos = Mouse.current?.position.ReadValue() ?? Vector2.zero;
+            #else
+            Vector2 mousePos = Input.mousePosition;
+            #endif
+            transformStartMousePos = mousePos;
+        }
+        
+        if (clickReleased && isDraggingTransform)
+        {
+            isDraggingTransform = false;
+        }
+        
+        if (isDraggingTransform && clickHeld)
+        {
+            #if ENABLE_INPUT_SYSTEM
+            Vector2 currentMousePos = Mouse.current?.position.ReadValue() ?? Vector2.zero;
+            #else
+            Vector2 currentMousePos = Input.mousePosition;
+            #endif
+            
+            Vector2 mouseDelta = currentMousePos - transformStartMousePos;
+            
+            // Mouse X rotates around Y axis (yaw), Mouse Y rotates around X axis (pitch)
+            float yawDelta = mouseDelta.x * rotationSensitivity;
+            float pitchDelta = -mouseDelta.y * rotationSensitivity;
+            
+            // Apply rotation relative to camera view
+            Quaternion yawRotation = Quaternion.AngleAxis(yawDelta, Vector3.up);
+            Quaternion pitchRotation = Quaternion.AngleAxis(pitchDelta, editCamera.transform.right);
+            
+            targetMesh.transform.rotation = yawRotation * pitchRotation * transformStartRot;
+        }
+    }
+    
+    void HandleMeshScale()
+    {
+        if (editCamera == null)
+            return;
+        
+        bool clickPressed = false;
+        bool clickHeld = false;
+        bool clickReleased = false;
+        
+        #if ENABLE_INPUT_SYSTEM
+        Mouse mouse = Mouse.current;
+        if (mouse != null)
+        {
+            clickPressed = mouse.leftButton.wasPressedThisFrame;
+            clickHeld = mouse.leftButton.isPressed;
+            clickReleased = mouse.leftButton.wasReleasedThisFrame;
+        }
+        #else
+        clickPressed = Input.GetMouseButtonDown(0);
+        clickHeld = Input.GetMouseButton(0);
+        clickReleased = Input.GetMouseButtonUp(0);
+        #endif
+        
+        if (clickPressed && !isDraggingTransform)
+        {
+            isDraggingTransform = true;
+            transformStartScale = targetMesh.transform.localScale;
+            
+            #if ENABLE_INPUT_SYSTEM
+            Vector2 mousePos = Mouse.current?.position.ReadValue() ?? Vector2.zero;
+            #else
+            Vector2 mousePos = Input.mousePosition;
+            #endif
+            transformStartMousePos = mousePos;
+        }
+        
+        if (clickReleased && isDraggingTransform)
+        {
+            isDraggingTransform = false;
+        }
+        
+        if (isDraggingTransform && clickHeld)
+        {
+            #if ENABLE_INPUT_SYSTEM
+            Vector2 currentMousePos = Mouse.current?.position.ReadValue() ?? Vector2.zero;
+            #else
+            Vector2 currentMousePos = Input.mousePosition;
+            #endif
+            
+            Vector2 mouseDelta = currentMousePos - transformStartMousePos;
+            
+            // Use mouse Y for uniform scaling (drag up = bigger, drag down = smaller)
+            float scaleDelta = mouseDelta.y * scaleSensitivity;
+            float scaleMultiplier = 1.0f + scaleDelta;
+            
+            // Clamp to prevent negative or zero scale
+            scaleMultiplier = Mathf.Max(scaleMultiplier, 0.01f);
+            
+            Vector3 newScale = transformStartScale * scaleMultiplier;
+            targetMesh.transform.localScale = newScale;
         }
     }
     
@@ -316,12 +610,41 @@ public class RuntimeMeshEditor : MonoBehaviour
         boxStyle.normal.textColor = Color.white;
         boxStyle.fontSize = 14;
         
-        string instructions = "Vertex Mode: ON\nClick vertices to select & drag\nPress Tab to exit";
-        GUI.Box(new Rect(10, 10, 250, 70), instructions, boxStyle);
-        
-        if (selectedVertexIndex >= 0)
+        string modeText = currentTransformMode switch
         {
-            GUI.Box(new Rect(10, 90, 150, 30), $"Selected: V{selectedVertexIndex}", boxStyle);
+            TransformMode.Translate => "TRANSLATE",
+            TransformMode.Rotate => "ROTATE",
+            TransformMode.Scale => "SCALE",
+            _ => "VERTICES"
+        };
+        Color modeColor = (currentTransformMode != TransformMode.Vertices) ? transformModeColor : Color.white;
+        
+        GUIStyle modeStyle = new GUIStyle(GUI.skin.box);
+        modeStyle.normal.textColor = modeColor;
+        modeStyle.fontSize = 16;
+        modeStyle.fontStyle = FontStyle.Bold;
+        modeStyle.alignment = TextAnchor.MiddleCenter;
+        
+        GUI.Box(new Rect(10, 10, 250, 30), $"Mode: {modeText}", modeStyle);
+        
+        string instructions = "M = Translate | R = Rotate | S = Scale\nESC = Vertices | Tab = Exit";
+        GUI.Box(new Rect(10, 50, 300, 60), instructions, boxStyle);
+        
+        if (currentTransformMode == TransformMode.Vertices && selectedVertexIndex >= 0)
+        {
+            GUI.Box(new Rect(10, 120, 150, 30), $"Selected: V{selectedVertexIndex}", boxStyle);
+        }
+        
+        if (currentTransformMode != TransformMode.Vertices && isDraggingTransform)
+        {
+            string dragText = currentTransformMode switch
+            {
+                TransformMode.Translate => "Translating...",
+                TransformMode.Rotate => "Rotating...",
+                TransformMode.Scale => "Scaling...",
+                _ => ""
+            };
+            GUI.Box(new Rect(10, 120, 200, 30), dragText, boxStyle);
         }
     }
     
