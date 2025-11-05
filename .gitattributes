@@ -1,0 +1,56 @@
+# Unity .gitattributes - Handles line endings and merge strategies
+# Ensures consistent behavior across different operating systems
+
+# Auto-detect text files and perform LF normalization
+* text=auto
+
+# Unity YAML files (scenes, prefabs, etc.) - treat as text with LF endings
+*.meta -text merge=unityyamlmerge eol=lf
+*.unity -text merge=unityyamlmerge eol=lf
+*.prefab -text merge=unityyamlmerge eol=lf
+*.asset -text merge=unityyamlmerge eol=lf
+*.mat -text merge=unityyamlmerge eol=lf
+*.controller -text merge=unityyamlmerge eol=lf
+*.anim -text merge=unityyamlmerge eol=lf
+
+# Unity binary files - treat as binary
+*.cubemap binary
+*.unitypackage binary
+
+# 3D models
+*.fbx binary
+*.obj binary
+*.3ds binary
+*.dae binary
+*.max binary
+*.blend binary
+
+# Audio
+*.mp3 binary
+*.wav binary
+*.ogg binary
+
+# Images
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.psd binary
+*.tga binary
+*.tif binary
+*.tiff binary
+*.exr binary
+
+# Fonts
+*.ttf binary
+*.otf binary
+
+# Video
+*.mp4 binary
+*.mov binary
+*.avi binary
+
+# Compiled Dynamic Library
+*.dll binary
+*.so binary
+*.dylib binary
+
