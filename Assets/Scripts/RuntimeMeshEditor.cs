@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -22,6 +23,11 @@ public class RuntimeMeshEditor : MonoBehaviour
     public Color normalColor = Color.white;
     public bool disableCameraInVertexMode = true;
     public bool showLabels = true;
+    
+    [Header("Visual Aids")]
+    public bool showEdges = true;
+    public Color edgeColor = Color.cyan;
+    public bool showInGameView = true; // Show edges in Game view, not just Scene view
     
     // State
     private EditableMesh.DisplayMode lastMode;
@@ -317,6 +323,145 @@ public class RuntimeMeshEditor : MonoBehaviour
         {
             GUI.Box(new Rect(10, 90, 150, 30), $"Selected: V{selectedVertexIndex}", boxStyle);
         }
+    }
+    
+    void OnDrawGizmos()
+    {
+        if (!showEdges || targetMesh == null || showInGameView)
+            return;
+        
+        bool inVertexMode = (targetMesh.mode == EditableMesh.DisplayMode.Vertices);
+        if (!inVertexMode)
+            return;
+        
+        DrawMeshEdges();
+    }
+    
+    void OnRenderObject()
+    {
+        if (!showEdges || !showInGameView || targetMesh == null)
+            return;
+        
+        bool inVertexMode = (targetMesh.mode == EditableMesh.DisplayMode.Vertices);
+        if (!inVertexMode || !Application.isPlaying)
+            return;
+        
+        // Use GL to draw lines in Game view
+        DrawMeshEdgesGL();
+    }
+    
+    void DrawMeshEdges()
+    {
+        // For Scene view (Gizmos)
+        var edges = GetMeshEdges();
+        if (edges == null)
+            return;
+        
+        Transform meshTransform = targetMesh.transform;
+        MeshFilter mf = meshTransform.GetComponentInChildren<MeshFilter>();
+        if (mf == null || mf.sharedMesh == null)
+            return;
+        
+        Vector3[] meshVerts = mf.sharedMesh.vertices;
+        
+        Gizmos.color = edgeColor;
+        foreach (var edge in edges)
+        {
+            Vector3 start = meshTransform.TransformPoint(meshVerts[edge.Item1]);
+            Vector3 end = meshTransform.TransformPoint(meshVerts[edge.Item2]);
+            Gizmos.DrawLine(start, end);
+        }
+    }
+    
+    void DrawMeshEdgesGL()
+    {
+        // For Game view (GL rendering)
+        var edges = GetMeshEdges();
+        if (edges == null)
+            return;
+        
+        Transform meshTransform = targetMesh.transform;
+        MeshFilter mf = meshTransform.GetComponentInChildren<MeshFilter>();
+        if (mf == null || mf.sharedMesh == null)
+            return;
+        
+        Vector3[] meshVerts = mf.sharedMesh.vertices;
+        
+        // Create material if needed
+        if (!lineMaterial)
+        {
+            Shader shader = Shader.Find("Hidden/Internal-Colored");
+            lineMaterial = new Material(shader);
+            lineMaterial.hideFlags = HideFlags.HideAndDontSave;
+            lineMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            lineMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            lineMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+            lineMaterial.SetInt("_ZWrite", 0);
+        }
+        
+        lineMaterial.SetPass(0);
+        
+        GL.PushMatrix();
+        GL.MultMatrix(meshTransform.localToWorldMatrix);
+        GL.Begin(GL.LINES);
+        GL.Color(edgeColor);
+        
+        foreach (var edge in edges)
+        {
+            GL.Vertex(meshVerts[edge.Item1]);
+            GL.Vertex(meshVerts[edge.Item2]);
+        }
+        
+        GL.End();
+        GL.PopMatrix();
+    }
+    
+    HashSet<(int, int)> GetMeshEdges()
+    {
+        Transform meshTransform = targetMesh.transform;
+        MeshFilter mf = meshTransform.GetComponentInChildren<MeshFilter>();
+        
+        if (mf == null || mf.sharedMesh == null)
+            return null;
+        
+        Mesh mesh = mf.sharedMesh;
+        int[] triangles = mesh.triangles;
+        HashSet<(int, int)> edges = new HashSet<(int, int)>();
+        
+        // Extract ALL edges from ALL triangles
+        for (int i = 0; i < triangles.Length; i += 3)
+        {
+            int v0 = triangles[i];
+            int v1 = triangles[i + 1];
+            int v2 = triangles[i + 2];
+            
+            // Add all 3 edges of this triangle
+            AddEdge(edges, v0, v1);
+            AddEdge(edges, v1, v2);
+            AddEdge(edges, v2, v0);
+        }
+        
+        return edges;
+    }
+    
+    void AddEdge(HashSet<(int, int)> edges, int v0, int v1)
+    {
+        // Store in sorted order to avoid duplicates
+        if (v0 > v1)
+        {
+            int temp = v0;
+            v0 = v1;
+            v1 = temp;
+        }
+        edges.Add((v0, v1));
+    }
+    
+    private Material lineMaterial;
+    
+    void OnDestroy()
+    {
+        if (lineMaterial != null)
+            DestroyImmediate(lineMaterial);
     }
 }
 
