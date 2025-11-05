@@ -324,6 +324,14 @@ public class EditableMesh : MonoBehaviour
         return uniqueVertices != null ? (Vector3[])uniqueVertices.Clone() : new Vector3[0];
     }
     
+    public Vector3 GetVertex(int index)
+    {
+        if (uniqueVertices == null || index < 0 || index >= uniqueVertices.Length)
+            return Vector3.zero;
+        
+        return uniqueVertices[index];
+    }
+    
     public int GetVertexCount()
     {
         return uniqueVertices != null ? uniqueVertices.Length : 0;
