@@ -40,7 +40,7 @@ public class EditableMesh : MonoBehaviour
     [Header("Origin Indicator")]
     public bool showOriginInObjectMode = true;
     public float originDotSize = 6f; // Pixels
-    public Color originColor = new Color(1f, 0.8f, 0.2f, 0.8f); // Orange/yellow
+    public Color originColorSelected = new Color(1f, 0.5f, 0f, 1f); // Orange when selected
     public bool showOriginInGameView = true;
     public bool showOriginInSceneView = true;
     
@@ -497,6 +497,10 @@ public class EditableMesh : MonoBehaviour
         if (screenPos.z < 0)
             return;
         
+        // Check if this object is selected
+        bool isSelected = IsThisObjectSelected();
+        Color dotColor = isSelected ? originColorSelected : originColor;
+        
         // GUI coordinates: (0,0) is top-left, Y increases downward
         // WorldToScreenPoint: (0,0) is bottom-left, Y increases upward
         // So we flip Y
@@ -508,22 +512,22 @@ public class EditableMesh : MonoBehaviour
         
         // Draw multiple circles for a nice visible dot
         // Outer glow
-        GUI.color = new Color(originColor.r, originColor.g, originColor.b, 0.2f);
+        GUI.color = new Color(dotColor.r, dotColor.g, dotColor.b, 0.3f);
         GUI.DrawTexture(new Rect(guiPos.x - halfSize - 3, guiPos.y - halfSize - 3, 
                                 originDotSize + 6, originDotSize + 6), dot);
         
         // Middle ring (darker border)
-        GUI.color = new Color(0f, 0f, 0f, 0.6f);
+        GUI.color = new Color(0f, 0f, 0f, 0.7f);
         GUI.DrawTexture(new Rect(guiPos.x - halfSize - 1, guiPos.y - halfSize - 1, 
                                 originDotSize + 2, originDotSize + 2), dot);
         
         // Inner circle (colored)
-        GUI.color = originColor;
+        GUI.color = dotColor;
         GUI.DrawTexture(new Rect(guiPos.x - halfSize, guiPos.y - halfSize, 
                                 originDotSize, originDotSize), dot);
         
-        // Center highlight
-        GUI.color = Color.white;
+        // Center highlight (brighter when selected)
+        GUI.color = isSelected ? Color.white : new Color(1f, 1f, 1f, 0.5f);
         GUI.DrawTexture(new Rect(guiPos.x - 1, guiPos.y - 1, 2, 2), dot);
         
         GUI.color = Color.white;
@@ -534,8 +538,12 @@ public class EditableMesh : MonoBehaviour
         Vector3 origin = transform.position;
         float size = 0.05f;
         
+        // Check if this object is selected
+        bool isSelected = IsThisObjectSelected();
+        Color gizmoColor = isSelected ? originColorSelected : originColor;
+        
         // Simple cross hair in Scene view
-        Gizmos.color = originColor;
+        Gizmos.color = gizmoColor;
         Gizmos.DrawLine(origin - transform.right * size, origin + transform.right * size);
         Gizmos.DrawLine(origin - transform.up * size, origin + transform.up * size);
         Gizmos.DrawLine(origin - transform.forward * size, origin + transform.forward * size);
