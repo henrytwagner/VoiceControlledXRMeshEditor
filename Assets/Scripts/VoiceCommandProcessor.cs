@@ -9,10 +9,13 @@ using System.Collections.Generic;
 public class VoiceCommandProcessor : MonoBehaviour
 {
     [Header("References")]
-    public EditableMesh targetMesh;
+    public EditableMesh targetMesh; // Legacy: specific mesh
+    public ObjectSelector objectSelector; // For getting currently selected object
     
     [Header("Settings")]
     public bool logCommands = true;
+    [Tooltip("Use currently selected object if no object_name specified in command")]
+    public bool useSelectedObject = true;
     
     // Command result feedback
     public struct CommandResult
@@ -31,6 +34,9 @@ public class VoiceCommandProcessor : MonoBehaviour
     {
         if (targetMesh == null)
             targetMesh = FindAnyObjectByType<EditableMesh>();
+        
+        if (objectSelector == null)
+            objectSelector = FindAnyObjectByType<ObjectSelector>();
     }
     
     #region JSON Command Processing
@@ -64,30 +70,98 @@ public class VoiceCommandProcessor : MonoBehaviour
     /// </summary>
     CommandResult ExecuteCommand(MeshCommand command)
     {
-        if (targetMesh == null)
-            return new CommandResult(false, "No target mesh assigned");
+        // Get the target mesh for this command
+        EditableMesh mesh = GetTargetMesh(command);
         
+        if (mesh == null)
+            return new CommandResult(false, command.object_name != null ? 
+                $"Object '{command.object_name}' not found" : 
+                "No target mesh assigned or selected");
+        
+        // Temporarily set targetMesh for legacy command methods
+        EditableMesh previousTarget = targetMesh;
+        targetMesh = mesh;
+        
+        CommandResult result;
         switch (command.command.ToLower())
         {
             case "move_vertex":
-                return MoveVertex(command);
+                result = MoveVertex(command);
+                break;
             case "move_vertices":
-                return MoveVertices(command);
+                result = MoveVertices(command);
+                break;
             case "set_vertex":
-                return SetVertex(command);
+                result = SetVertex(command);
+                break;
             case "translate_mesh":
-                return TranslateMesh(command);
+                result = TranslateMesh(command);
+                break;
             case "rotate_mesh":
-                return RotateMesh(command);
+                result = RotateMesh(command);
+                break;
             case "scale_mesh":
-                return ScaleMesh(command);
+                result = ScaleMesh(command);
+                break;
             case "reset_vertex":
-                return ResetVertex(command);
+                result = ResetVertex(command);
+                break;
             case "rebuild_mesh":
-                return RebuildMesh(command);
+                result = RebuildMesh(command);
+                break;
+            case "get_vertex_position":
+                result = GetVertexPosition(command);
+                break;
+            case "get_all_vertices":
+                result = GetAllVertexPositions();
+                break;
+            case "get_mesh_transform":
+                result = GetMeshTransform();
+                break;
+            case "list_objects":
+                result = ListObjects();
+                break;
             default:
-                return new CommandResult(false, $"Unknown command: {command.command}");
+                result = new CommandResult(false, $"Unknown command: {command.command}");
+                break;
         }
+        
+        // Restore previous target
+        targetMesh = previousTarget;
+        return result;
+    }
+    
+    /// <summary>
+    /// Get the target mesh based on command object_name or current selection
+    /// </summary>
+    EditableMesh GetTargetMesh(MeshCommand command)
+    {
+        // If object_name is specified, find by name
+        if (!string.IsNullOrEmpty(command.object_name))
+        {
+            EditableMesh[] allMeshes = FindObjectsByType<EditableMesh>(FindObjectsSortMode.None);
+            foreach (EditableMesh mesh in allMeshes)
+            {
+                if (mesh.gameObject.name == command.object_name)
+                    return mesh;
+            }
+            return null; // Object not found
+        }
+        
+        // If useSelectedObject is enabled, try to get selected object
+        if (useSelectedObject && objectSelector != null)
+        {
+            Transform selected = objectSelector.GetCurrentSelection();
+            if (selected != null)
+            {
+                EditableMesh mesh = selected.GetComponent<EditableMesh>();
+                if (mesh != null)
+                    return mesh;
+            }
+        }
+        
+        // Fallback to assigned targetMesh
+        return targetMesh;
     }
     
     #endregion
@@ -310,6 +384,30 @@ public class VoiceCommandProcessor : MonoBehaviour
         );
     }
     
+    /// <summary>
+    /// List all editable objects in the scene
+    /// JSON: {"command":"list_objects"}
+    /// </summary>
+    CommandResult ListObjects()
+    {
+        EditableMesh[] allMeshes = FindObjectsByType<EditableMesh>(FindObjectsSortMode.None);
+        
+        if (allMeshes.Length == 0)
+            return new CommandResult(true, "No objects in scene");
+        
+        string objectList = "Objects in scene:\n";
+        for (int i = 0; i < allMeshes.Length; i++)
+        {
+            EditableMesh mesh = allMeshes[i];
+            int vertexCount = mesh.GetVertexCount();
+            Vector3 pos = mesh.transform.position;
+            objectList += $"- {mesh.gameObject.name}: {vertexCount} vertices, position ({pos.x:F2}, {pos.y:F2}, {pos.z:F2})\n";
+        }
+        
+        Debug.Log(objectList);
+        return new CommandResult(true, objectList);
+    }
+    
     #endregion
 }
 
@@ -320,6 +418,7 @@ public class VoiceCommandProcessor : MonoBehaviour
 public class MeshCommand
 {
     public string command;              // Command type (e.g., "move_vertex")
+    public string object_name;          // Optional: Name of object to target (e.g., "Cube_1")
     public int vertex;                  // Single vertex index
     public int[] vertices;              // Multiple vertex indices
     public Vector3 offset;              // Offset for movement

@@ -10,6 +10,32 @@ This document describes the JSON format your AI/VLM should generate to control m
    - Y: Up (+) / Down (-)
    - Z: Forward (+) / Back (-)
 3. **Vertex Indices**: Start at 0 (V0, V1, V2, etc.)
+4. **Multiple Objects**: Use `object_name` to target specific objects (e.g., "Cube_1", "Sphere_2")
+   - If `object_name` is omitted, the command affects the **currently selected** object
+   - Object names are shown in the scene and can be queried with voice commands
+
+## Object Targeting
+
+All commands support an optional `object_name` field to target specific objects:
+
+```json
+{
+    "command": "move_vertex",
+    "object_name": "Cube_1",
+    "vertex": 1,
+    "offset": {"x": 0, "y": 0.1, "z": 0}
+}
+```
+
+**Targeting Priority**:
+1. If `object_name` is specified → Find object by that exact name
+2. If no `object_name` → Use currently **selected** object (clicked object)
+3. If nothing selected → Use fallback target mesh
+
+**Getting Object Names**:
+- Objects are automatically named: `Cube_1`, `Sphere_2`, `Cylinder_1`, etc.
+- User can say "what objects are in the scene?" to list them
+- Names are visible in the Transform Panel when objects are selected
 
 ## Command Reference
 
@@ -200,6 +226,29 @@ Reset the entire mesh to its original state.
 
 ---
 
+### 10. List Objects
+
+Get a list of all editable objects in the scene with their properties.
+
+**Voice Example**: "What objects are in the scene?" or "List all objects"
+
+**JSON Output**:
+```json
+{
+    "command": "list_objects"
+}
+```
+
+**Returns**: List of object names, vertex counts, and positions
+```
+Objects in scene:
+- Cube_1: 8 vertices, position (0.00, 0.00, 0.00)
+- Sphere_1: 382 vertices, position (2.50, 0.00, 0.00)
+- Cylinder_1: 66 vertices, position (-2.00, 1.00, 0.00)
+```
+
+---
+
 ## Direction Mappings for AI
 
 When the user says directional words, convert them to vectors:
@@ -225,7 +274,7 @@ When the user says directional words, convert them to vectors:
 
 ## Complex Command Examples
 
-### Example 1: "Move vertex 0 down 3cm and back 5cm"
+### Example 1: "Move vertex 0 down 3cm and back 5cm" (on selected object)
 ```json
 {
     "command": "move_vertex",
@@ -234,21 +283,49 @@ When the user says directional words, convert them to vectors:
 }
 ```
 
-### Example 2: "Move the top vertices forward"
+### Example 2: "Move vertex 2 of Cube_1 up 10cm"
+```json
+{
+    "command": "move_vertex",
+    "object_name": "Cube_1",
+    "vertex": 2,
+    "offset": {"x": 0, "y": 0.1, "z": 0}
+}
+```
+
+### Example 3: "Move the top vertices of Sphere_2 forward"
 (Assuming vertices 0-3 are top vertices based on context)
 ```json
 {
     "command": "move_vertices",
+    "object_name": "Sphere_2",
     "vertices": [0, 1, 2, 3],
     "offset": {"x": 0, "y": 0, "z": 0.1}
 }
 ```
 
-### Example 3: "Rotate the mesh 180 degrees"
+### Example 4: "Rotate Cylinder_1 by 180 degrees"
 ```json
 {
     "command": "rotate_mesh",
+    "object_name": "Cylinder_1",
     "rotation": {"x": 0, "y": 180, "z": 0}
+}
+```
+
+### Example 5: Multi-object workflow
+User: "What's in the scene?"
+```json
+{"command": "list_objects"}
+```
+
+User: "Move vertex 0 of Cube_2 up 5cm"
+```json
+{
+    "command": "move_vertex",
+    "object_name": "Cube_2",
+    "vertex": 0,
+    "offset": {"x": 0, "y": 0.05, "z": 0}
 }
 ```
 
