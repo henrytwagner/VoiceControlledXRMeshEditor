@@ -185,6 +185,9 @@ public class ObjectSelector : MonoBehaviour
         if (currentSelection == obj)
             return true;
         
+        // Debug: Log position before selection
+        Debug.Log($"[ObjectSelector] Selecting {obj.name} at position {obj.position}");
+        
         // Deselect previous
         ClearSelection();
         
@@ -195,6 +198,9 @@ public class ObjectSelector : MonoBehaviour
         {
             transformPanel.SetSelectedObject(obj);
         }
+        
+        // Debug: Log position after selection
+        Debug.Log($"[ObjectSelector] {obj.name} position after selection: {obj.position}");
         
         return true;
     }

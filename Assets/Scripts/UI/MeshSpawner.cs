@@ -109,7 +109,7 @@ public class MeshSpawner : MonoBehaviour
         // Track it
         spawnedMeshes.Add(editableMesh);
         
-        Debug.Log($"[MeshSpawner] Spawned {objectName} at {spawnPosition}");
+        Debug.Log($"[MeshSpawner] Spawned {objectName} at {newObj.transform.position}");
         
         return editableMesh;
     }

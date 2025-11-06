@@ -106,7 +106,7 @@ public class TopMenuBar : MonoBehaviour
         GUI.Box(new Rect(0, 0, menuWidth, menuHeight), "", menuBarStyle);
         
         float xPos = 10f;
-        float buttonWidth = 100f;
+        float buttonWidth = 100f; // TODO: Make this dynamic based on the text length of the button
         float buttonHeight = menuHeight - 6f;
         float yPos = 3f;
         

@@ -164,6 +164,8 @@ public class RuntimeMeshEditor : MonoBehaviour
             {
                 // Switched to a different mesh
                 Deselect(); // Clear previous vertex selection
+                isDraggingTransform = false; // Cancel any ongoing transform drag
+                currentTransformMode = TransformMode.Vertices; // Reset to default mode
                 targetMesh = mesh;
                 lastMode = mesh.mode;
                 Debug.Log($"[RuntimeMeshEditor] Now editing: {mesh.gameObject.name}");

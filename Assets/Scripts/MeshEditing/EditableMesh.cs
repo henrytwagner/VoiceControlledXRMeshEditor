@@ -40,6 +40,7 @@ public class EditableMesh : MonoBehaviour
     [Header("Origin Indicator")]
     public bool showOriginInObjectMode = true;
     public float originDotSize = 6f; // Pixels
+    public Color originColor = new Color(0.5f, 0.5f, 0.5f, 0.6f); // Gray when not selected
     public Color originColorSelected = new Color(1f, 0.5f, 0f, 1f); // Orange when selected
     public bool showOriginInGameView = true;
     public bool showOriginInSceneView = true;
@@ -56,6 +57,10 @@ public class EditableMesh : MonoBehaviour
     // Unique vertex positions and their mapping to mesh indices
     [SerializeField] private Vector3[] uniqueVertices;
     [SerializeField] private int[][] vertexToMeshIndices; // Each unique vertex maps to multiple mesh indices
+    
+    // Cached reference for selection checking
+    private ObjectSelector cachedSelector;
+    private float selectorCheckTimer = 0f;
     
     void Reset()
     {
@@ -165,16 +170,26 @@ public class EditableMesh : MonoBehaviour
     
     bool IsThisObjectSelected()
     {
-        // Check if this mesh is currently selected by ObjectSelector
-        ObjectSelector selector = FindAnyObjectByType<ObjectSelector>();
-        if (selector != null)
+        // Cache ObjectSelector reference (update every 0.5 seconds)
+        if (cachedSelector == null || Time.time - selectorCheckTimer > 0.5f)
         {
-            Transform selected = selector.GetCurrentSelection();
+            cachedSelector = FindAnyObjectByType<ObjectSelector>();
+            selectorCheckTimer = Time.time;
+        }
+        
+        if (cachedSelector != null)
+        {
+            Transform selected = cachedSelector.GetCurrentSelection();
+            
+            // Only return true if something IS selected AND it's this object
+            if (selected == null)
+                return false; // Nothing selected = not selected
+            
             return selected == transform || selected == transform.parent;
         }
         
-        // If no selector, allow toggle (backward compatibility)
-        return true;
+        // If no selector, assume not selected
+        return false;
     }
     
     public void ToggleMode()
