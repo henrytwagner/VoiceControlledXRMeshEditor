@@ -14,7 +14,7 @@ public class TopMenuBar : MonoBehaviour
     
     [Header("Menu Style")]
     public float menuHeight = 30f;
-    public float menuWidth = 220f; // Compact width for left corner
+    public float menuWidth = 270f; // Width to fit buttons (150px Add Object + 100px Clear All + spacing)
     public Color menuBarColor = new Color(0.25f, 0.25f, 0.25f, 0.95f);
     public Color buttonColor = new Color(0.3f, 0.3f, 0.3f, 1f);
     public Color buttonHoverColor = new Color(0.4f, 0.4f, 0.4f, 1f);
@@ -102,22 +102,27 @@ public class TopMenuBar : MonoBehaviour
     
     void DrawMenuBar()
     {
-        // Draw menu bar background - only in left corner
-        GUI.Box(new Rect(0, 0, menuWidth, menuHeight), "", menuBarStyle);
-        
         float xPos = 10f;
-        float buttonWidth = 100f; // TODO: Make this dynamic based on the text length of the button
+        float addButtonWidth = 150f; // Add Object button width
+        float buttonWidth = 100f; // Other buttons width
         float buttonHeight = menuHeight - 6f;
         float yPos = 3f;
+        float spacing = 5f;
+        
+        // Calculate actual menu width based on buttons
+        float calculatedWidth = xPos + addButtonWidth + spacing + buttonWidth + 10f; // 10f for right margin
+        
+        // Draw menu bar background - only in left corner
+        GUI.Box(new Rect(0, 0, calculatedWidth, menuHeight), "", menuBarStyle);
         
         // Add Object button
-        addButtonRect = new Rect(xPos, yPos, buttonWidth, buttonHeight);
+        addButtonRect = new Rect(xPos, yPos, addButtonWidth, buttonHeight);
         if (GUI.Button(addButtonRect, "Add Object ▼", buttonStyle))
         {
             showAddDropdown = !showAddDropdown;
         }
         
-        xPos += buttonWidth + 5f;
+        xPos += addButtonWidth + spacing;
         
         // Clear All button
         if (GUI.Button(new Rect(xPos, yPos, buttonWidth, buttonHeight), "Clear All", buttonStyle))
