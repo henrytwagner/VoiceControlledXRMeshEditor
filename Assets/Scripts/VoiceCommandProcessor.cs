@@ -11,6 +11,10 @@ public class VoiceCommandProcessor : MonoBehaviour
     [Header("References")]
     public EditableMesh targetMesh; // Legacy: specific mesh
     public ObjectSelector objectSelector; // For getting currently selected object
+    public MeshSpawner meshSpawner; // For creating objects
+    public TransformPanel transformPanel; // For UI control
+    public OrientationGizmo orientationGizmo; // For gizmo control
+    public DesktopCameraController cameraController; // For camera control
     
     [Header("Settings")]
     public bool logCommands = true;
@@ -32,11 +36,30 @@ public class VoiceCommandProcessor : MonoBehaviour
     
     void Start()
     {
+        // Auto-find components if not assigned
         if (targetMesh == null)
             targetMesh = FindAnyObjectByType<EditableMesh>();
         
         if (objectSelector == null)
             objectSelector = FindAnyObjectByType<ObjectSelector>();
+        
+        if (meshSpawner == null)
+            meshSpawner = FindAnyObjectByType<MeshSpawner>();
+        
+        if (transformPanel == null)
+            transformPanel = FindAnyObjectByType<TransformPanel>();
+        
+        if (orientationGizmo == null)
+            orientationGizmo = FindAnyObjectByType<OrientationGizmo>();
+        
+        if (cameraController == null)
+            cameraController = FindAnyObjectByType<DesktopCameraController>();
+        
+        Debug.Log($"[VoiceCommandProcessor] Initialized - useSelectedObject: {useSelectedObject}");
+        if (objectSelector != null)
+            Debug.Log($"[VoiceCommandProcessor] ObjectSelector found, will use selected object");
+        else
+            Debug.LogWarning("[VoiceCommandProcessor] No ObjectSelector found! Assign it in Inspector or ensure one exists in scene.");
     }
     
     #region JSON Command Processing
@@ -121,6 +144,39 @@ public class VoiceCommandProcessor : MonoBehaviour
             case "list_objects":
                 result = ListObjects();
                 break;
+            
+            // Navigation & Control Commands
+            case "spawn_object":
+            case "create_object":
+                result = SpawnObject(command);
+                break;
+            case "delete_object":
+            case "remove_object":
+                result = DeleteObject(command);
+                break;
+            case "select_object":
+                result = SelectObject(command);
+                break;
+            case "set_mode":
+            case "switch_mode":
+                result = SetMode(command);
+                break;
+            case "move_camera":
+                result = MoveCamera(command);
+                break;
+            case "toggle_transform_panel":
+                result = ToggleTransformPanel(command);
+                break;
+            case "toggle_orientation_gizmo":
+                result = ToggleOrientationGizmo(command);
+                break;
+            case "toggle_mouse_look":
+                result = ToggleMouseLook(command);
+                break;
+            case "clear_all":
+                result = ClearAll();
+                break;
+            
             default:
                 result = new CommandResult(false, $"Unknown command: {command.command}");
                 break;
@@ -136,6 +192,8 @@ public class VoiceCommandProcessor : MonoBehaviour
     /// </summary>
     EditableMesh GetTargetMesh(MeshCommand command)
     {
+        EditableMesh result = null;
+        
         // If object_name is specified, find by name
         if (!string.IsNullOrEmpty(command.object_name))
         {
@@ -143,9 +201,17 @@ public class VoiceCommandProcessor : MonoBehaviour
             foreach (EditableMesh mesh in allMeshes)
             {
                 if (mesh.gameObject.name == command.object_name)
-                    return mesh;
+                {
+                    result = mesh;
+                    Debug.Log($"[VoiceCommand] Targeting object by name: {command.object_name}");
+                    break;
+                }
             }
-            return null; // Object not found
+            
+            if (result == null)
+                Debug.LogWarning($"[VoiceCommand] Object '{command.object_name}' not found in scene!");
+            
+            return result;
         }
         
         // If useSelectedObject is enabled, try to get selected object
@@ -156,12 +222,30 @@ public class VoiceCommandProcessor : MonoBehaviour
             {
                 EditableMesh mesh = selected.GetComponent<EditableMesh>();
                 if (mesh != null)
+                {
+                    Debug.Log($"[VoiceCommand] Targeting selected object: {mesh.gameObject.name}");
                     return mesh;
+                }
+                else
+                {
+                    Debug.LogWarning($"[VoiceCommand] Selected object '{selected.name}' has no EditableMesh component!");
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[VoiceCommand] No object selected! Select an object first or specify 'object_name' in JSON.");
             }
         }
         
         // Fallback to assigned targetMesh
-        return targetMesh;
+        if (targetMesh != null)
+        {
+            Debug.Log($"[VoiceCommand] Using fallback target: {targetMesh.gameObject.name}");
+            return targetMesh;
+        }
+        
+        Debug.LogError("[VoiceCommand] No target mesh found! Select an object or assign targetMesh in Inspector.");
+        return null;
     }
     
     #endregion
@@ -174,12 +258,22 @@ public class VoiceCommandProcessor : MonoBehaviour
     /// </summary>
     CommandResult MoveVertex(MeshCommand cmd)
     {
+        // Ensure mesh is in Edit mode for vertex editing
+        if (targetMesh.mode != EditableMesh.DisplayMode.Edit)
+        {
+            targetMesh.mode = EditableMesh.DisplayMode.Edit;
+            targetMesh.ApplyModeActiveStates();
+            Debug.Log($"[VoiceCommand] Auto-switched {targetMesh.gameObject.name} to Edit mode");
+        }
+        
         if (!ValidateVertexIndex(cmd.vertex, out string error))
             return new CommandResult(false, error);
         
         Vector3 currentPos = targetMesh.GetVertex(cmd.vertex);
         Vector3 newPos = currentPos + cmd.offset;
         targetMesh.SetVertex(cmd.vertex, newPos);
+        
+        Debug.Log($"[VoiceCommand] Vertex {cmd.vertex} moved from {currentPos} to {newPos}");
         
         return new CommandResult(true, $"Moved vertex {cmd.vertex} by {cmd.offset}");
     }
@@ -190,6 +284,14 @@ public class VoiceCommandProcessor : MonoBehaviour
     /// </summary>
     CommandResult MoveVertices(MeshCommand cmd)
     {
+        // Ensure mesh is in Edit mode for vertex editing
+        if (targetMesh.mode != EditableMesh.DisplayMode.Edit)
+        {
+            targetMesh.mode = EditableMesh.DisplayMode.Edit;
+            targetMesh.ApplyModeActiveStates();
+            Debug.Log($"[VoiceCommand] Auto-switched {targetMesh.gameObject.name} to Edit mode");
+        }
+        
         if (cmd.vertices == null || cmd.vertices.Length == 0)
             return new CommandResult(false, "No vertices specified");
         
@@ -217,6 +319,14 @@ public class VoiceCommandProcessor : MonoBehaviour
     /// </summary>
     CommandResult SetVertex(MeshCommand cmd)
     {
+        // Ensure mesh is in Edit mode for vertex editing
+        if (targetMesh.mode != EditableMesh.DisplayMode.Edit)
+        {
+            targetMesh.mode = EditableMesh.DisplayMode.Edit;
+            targetMesh.ApplyModeActiveStates();
+            Debug.Log($"[VoiceCommand] Auto-switched {targetMesh.gameObject.name} to Edit mode");
+        }
+        
         if (!ValidateVertexIndex(cmd.vertex, out string error))
             return new CommandResult(false, error);
         
@@ -231,6 +341,14 @@ public class VoiceCommandProcessor : MonoBehaviour
     /// </summary>
     CommandResult ResetVertex(MeshCommand cmd)
     {
+        // Ensure mesh is in Edit mode for vertex editing
+        if (targetMesh.mode != EditableMesh.DisplayMode.Edit)
+        {
+            targetMesh.mode = EditableMesh.DisplayMode.Edit;
+            targetMesh.ApplyModeActiveStates();
+            Debug.Log($"[VoiceCommand] Auto-switched {targetMesh.gameObject.name} to Edit mode");
+        }
+        
         if (!ValidateVertexIndex(cmd.vertex, out string error))
             return new CommandResult(false, error);
         
@@ -348,40 +466,56 @@ public class VoiceCommandProcessor : MonoBehaviour
     
     #endregion
     
-    #region Public API Functions (for testing/debugging)
+    #region Query Commands
     
     /// <summary>
-    /// Get current vertex position (useful for AI context)
+    /// Get vertex position command wrapper
+    /// JSON: {"command":"get_vertex_position", "vertex":1}
     /// </summary>
-    public Vector3 GetVertexPosition(int vertexIndex)
+    CommandResult GetVertexPosition(MeshCommand cmd)
     {
-        if (!ValidateVertexIndex(vertexIndex, out string error))
-        {
-            Debug.LogError(error);
-            return Vector3.zero;
-        }
+        if (!ValidateVertexIndex(cmd.vertex, out string error))
+            return new CommandResult(false, error);
         
-        return targetMesh.GetVertex(vertexIndex);
+        Vector3 pos = targetMesh.GetVertex(cmd.vertex);
+        string message = $"Vertex {cmd.vertex} position: ({pos.x:F3}, {pos.y:F3}, {pos.z:F3})";
+        Debug.Log(message);
+        return new CommandResult(true, message);
     }
     
     /// <summary>
-    /// Get all vertex positions (useful for AI context)
+    /// Get all vertices command wrapper
+    /// JSON: {"command":"get_all_vertices"}
     /// </summary>
-    public Vector3[] GetAllVertexPositions()
+    CommandResult GetAllVertexPositions()
     {
-        return targetMesh.GetVertices();
+        Vector3[] vertices = targetMesh.GetVertices();
+        string message = $"Mesh has {vertices.Length} vertices:\n";
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            Vector3 v = vertices[i];
+            message += $"V{i}: ({v.x:F3}, {v.y:F3}, {v.z:F3})\n";
+        }
+        Debug.Log(message);
+        return new CommandResult(true, message);
     }
     
     /// <summary>
-    /// Get mesh transform info (useful for AI context)
+    /// Get mesh transform command wrapper
+    /// JSON: {"command":"get_mesh_transform"}
     /// </summary>
-    public (Vector3 position, Quaternion rotation, Vector3 scale) GetMeshTransform()
+    CommandResult GetMeshTransform()
     {
-        return (
-            targetMesh.transform.position,
-            targetMesh.transform.rotation,
-            targetMesh.transform.localScale
-        );
+        Vector3 pos = targetMesh.transform.position;
+        Vector3 rot = targetMesh.transform.eulerAngles;
+        Vector3 scale = targetMesh.transform.localScale;
+        
+        string message = $"Mesh '{targetMesh.gameObject.name}' transform:\n" +
+                        $"Position: ({pos.x:F3}, {pos.y:F3}, {pos.z:F3})\n" +
+                        $"Rotation: ({rot.x:F1}, {rot.y:F1}, {rot.z:F1})\n" +
+                        $"Scale: ({scale.x:F3}, {scale.y:F3}, {scale.z:F3})";
+        Debug.Log(message);
+        return new CommandResult(true, message);
     }
     
     /// <summary>
@@ -409,6 +543,308 @@ public class VoiceCommandProcessor : MonoBehaviour
     }
     
     #endregion
+    
+    #region Navigation & Control Commands
+    
+    /// <summary>
+    /// Spawn/Create a new object
+    /// JSON: {"command":"spawn_object", "primitive_type":"Cube"}
+    /// </summary>
+    CommandResult SpawnObject(MeshCommand cmd)
+    {
+        MeshSpawner spawner = EnsureMeshSpawner();
+        if (spawner == null)
+            return new CommandResult(false, "No MeshSpawner found in scene");
+        
+        if (string.IsNullOrEmpty(cmd.primitive_type))
+            return new CommandResult(false, "No primitive_type specified");
+        
+        PrimitiveType primitiveType;
+        if (!System.Enum.TryParse(cmd.primitive_type, true, out primitiveType))
+            return new CommandResult(false, $"Invalid primitive type '{cmd.primitive_type}'. Use: Cube, Sphere, Cylinder, Capsule, or Plane");
+        
+        EditableMesh newMesh = spawner.SpawnPrimitive(primitiveType);
+        
+        if (newMesh != null)
+        {
+            EnsureObjectSelector()?.SelectTransform(newMesh.transform);
+            return new CommandResult(true, $"Created {cmd.primitive_type}: {newMesh.gameObject.name}");
+        }
+        else
+            return new CommandResult(false, $"Failed to create {cmd.primitive_type}");
+    }
+    
+    /// <summary>
+    /// Delete an object
+    /// JSON: {"command":"delete_object", "object_name":"Cube_1"}
+    /// </summary>
+    CommandResult DeleteObject(MeshCommand cmd)
+    {
+        if (string.IsNullOrEmpty(cmd.object_name))
+            return new CommandResult(false, "No object_name specified");
+        
+        EditableMesh[] allMeshes = FindObjectsByType<EditableMesh>(FindObjectsSortMode.None);
+        foreach (EditableMesh mesh in allMeshes)
+        {
+            if (mesh.gameObject.name == cmd.object_name)
+            {
+                ObjectSelector selector = EnsureObjectSelector();
+                if (selector != null && selector.GetCurrentSelection() == mesh.transform)
+                    selector.ClearSelection();
+                
+                string name = mesh.gameObject.name;
+                Destroy(mesh.gameObject);
+                return new CommandResult(true, $"Deleted {name}");
+            }
+        }
+        
+        return new CommandResult(false, $"Object '{cmd.object_name}' not found");
+    }
+    
+    /// <summary>
+    /// Select an object by name
+    /// JSON: {"command":"select_object", "object_name":"Cube_1"}
+    /// </summary>
+    CommandResult SelectObject(MeshCommand cmd)
+    {
+        ObjectSelector selector = EnsureObjectSelector();
+        if (selector == null)
+            return new CommandResult(false, "No ObjectSelector found in scene");
+        
+        if (string.IsNullOrEmpty(cmd.object_name))
+            return new CommandResult(false, "No object_name specified");
+        
+        if (selector.SelectByName(cmd.object_name))
+            return new CommandResult(true, $"Selected {cmd.object_name}");
+        
+        return new CommandResult(false, $"Object '{cmd.object_name}' not found");
+    }
+    
+    /// <summary>
+    /// Set mode for an object
+    /// JSON: {"command":"set_mode", "object_name":"Cube_1", "mode":"Edit"}
+    /// OR: {"command":"set_mode", "mode":"Object"} for selected object
+    /// </summary>
+    CommandResult SetMode(MeshCommand cmd)
+    {
+        EditableMesh mesh = GetTargetMesh(cmd);
+        if (mesh == null)
+            return new CommandResult(false, "No target object");
+        
+        if (string.IsNullOrEmpty(cmd.mode))
+            return new CommandResult(false, "No mode specified. Use 'Object' or 'Edit'");
+        
+        EditableMesh.DisplayMode newMode;
+        if (cmd.mode.ToLower() == "object")
+            newMode = EditableMesh.DisplayMode.Object;
+        else if (cmd.mode.ToLower() == "edit")
+            newMode = EditableMesh.DisplayMode.Edit;
+        else
+            return new CommandResult(false, $"Invalid mode '{cmd.mode}'. Use 'Object' or 'Edit'");
+        
+        mesh.mode = newMode;
+        mesh.ApplyModeActiveStates();
+        
+        return new CommandResult(true, $"Set {mesh.gameObject.name} to {cmd.mode} mode");
+    }
+    
+    /// <summary>
+    /// Move camera to position
+    /// JSON: {"command":"move_camera", "position":{"x":0,"y":2,"z":-5}}
+    /// </summary>
+    CommandResult MoveCamera(MeshCommand cmd)
+    {
+        if (cameraController == null)
+            cameraController = FindAnyObjectByType<DesktopCameraController>();
+        if (cameraController == null)
+            return new CommandResult(false, "No DesktopCameraController found");
+        
+        if (cmd.position != Vector3.zero)
+        {
+            cameraController.transform.position = cmd.position;
+            return new CommandResult(true, $"Moved camera to {cmd.position}");
+        }
+        else if (cmd.offset != Vector3.zero)
+        {
+            cameraController.transform.position += cmd.offset;
+            return new CommandResult(true, $"Offset camera by {cmd.offset}");
+        }
+        else
+        {
+            return new CommandResult(false, "Specify 'position' or 'offset' for move_camera command");
+        }
+    }
+    
+    /// <summary>
+    /// Toggle Transform Panel visibility
+    /// JSON: {"command":"toggle_transform_panel"} or {"command":"toggle_transform_panel", "enable":true}
+    /// </summary>
+    CommandResult ToggleTransformPanel(MeshCommand cmd)
+    {
+        TransformPanel panel = EnsureTransformPanel();
+        if (panel == null)
+            return new CommandResult(false, "No TransformPanel found");
+        
+        bool enable;
+        if (TryParseState(cmd.state, out enable))
+            panel.showPanel = enable;
+        else
+            panel.showPanel = !panel.showPanel;
+        
+        return new CommandResult(true, $"Transform panel: {(panel.showPanel ? "ON" : "OFF")}");
+    }
+    
+    /// <summary>
+    /// Toggle Orientation Gizmo visibility
+    /// JSON: {"command":"toggle_orientation_gizmo"}
+    /// </summary>
+    CommandResult ToggleOrientationGizmo(MeshCommand cmd)
+    {
+        OrientationGizmo gizmo = EnsureOrientationGizmo();
+        if (gizmo == null)
+            return new CommandResult(false, "No OrientationGizmo found");
+        
+        bool enable;
+        if (TryParseState(cmd.state, out enable))
+            gizmo.enabled = enable;
+        else
+            gizmo.enabled = !gizmo.enabled;
+        
+        return new CommandResult(true, $"Orientation gizmo: {(gizmo.enabled ? "ON" : "OFF")}");
+    }
+    
+    /// <summary>
+    /// Toggle mouse look mode
+    /// JSON: {"command":"toggle_mouse_look"}
+    /// </summary>
+    CommandResult ToggleMouseLook(MeshCommand cmd)
+    {
+        if (cameraController == null)
+            cameraController = FindAnyObjectByType<DesktopCameraController>();
+        if (cameraController == null)
+            return new CommandResult(false, "No DesktopCameraController found");
+        
+        bool enable;
+        if (TryParseState(cmd.state, out enable))
+            cameraController.SetMouseLook(enable);
+        else
+            cameraController.ToggleMouseLook();
+        
+        bool currentState = cameraController.IsMouseLookEnabled();
+        return new CommandResult(true, $"Mouse look {(currentState ? "ON" : "OFF")}");
+    }
+    
+    /// <summary>
+    /// Clear all spawned objects
+    /// JSON: {"command":"clear_all"}
+    /// </summary>
+    CommandResult ClearAll()
+    {
+        MeshSpawner spawner = EnsureMeshSpawner();
+        if (spawner == null)
+            return new CommandResult(false, "No MeshSpawner found");
+        
+        spawner.ClearAll();
+        EnsureObjectSelector()?.ClearSelection();
+        return new CommandResult(true, "Cleared all objects");
+    }
+    
+    #endregion
+    
+    #region Public API Functions (for direct code usage)
+    
+    /// <summary>
+    /// Get current vertex position (for direct code access, not JSON commands)
+    /// </summary>
+    public Vector3 GetVertexPositionDirect(int vertexIndex)
+    {
+        if (!ValidateVertexIndex(vertexIndex, out string error))
+        {
+            Debug.LogError(error);
+            return Vector3.zero;
+        }
+        
+        return targetMesh.GetVertex(vertexIndex);
+    }
+    
+    /// <summary>
+    /// Get all vertex positions (for direct code access, not JSON commands)
+    /// </summary>
+    public Vector3[] GetAllVertexPositionsDirect()
+    {
+        return targetMesh.GetVertices();
+    }
+    
+    /// <summary>
+    /// Get mesh transform info (for direct code access, not JSON commands)
+    /// </summary>
+    public (Vector3 position, Quaternion rotation, Vector3 scale) GetMeshTransformDirect()
+    {
+        return (
+            targetMesh.transform.position,
+            targetMesh.transform.rotation,
+            targetMesh.transform.localScale
+        );
+    }
+    
+    #endregion
+
+    TransformPanel EnsureTransformPanel()
+    {
+        if (transformPanel == null)
+            transformPanel = FindAnyObjectByType<TransformPanel>();
+        if (transformPanel == null)
+        {
+            GameObject panelGO = new GameObject("TransformPanel_Auto");
+            transformPanel = panelGO.AddComponent<TransformPanel>();
+        }
+        return transformPanel;
+    }
+    
+    OrientationGizmo EnsureOrientationGizmo()
+    {
+        if (orientationGizmo == null)
+            orientationGizmo = FindAnyObjectByType<OrientationGizmo>();
+        if (orientationGizmo == null)
+        {
+            GameObject gizmoGO = new GameObject("OrientationGizmo_Auto");
+            orientationGizmo = gizmoGO.AddComponent<OrientationGizmo>();
+        }
+        return orientationGizmo;
+    }
+    
+    MeshSpawner EnsureMeshSpawner()
+    {
+        if (meshSpawner == null)
+            meshSpawner = FindAnyObjectByType<MeshSpawner>();
+        return meshSpawner;
+    }
+    
+    ObjectSelector EnsureObjectSelector()
+    {
+        if (objectSelector == null)
+            objectSelector = FindAnyObjectByType<ObjectSelector>();
+        return objectSelector;
+    }
+    
+    bool TryParseState(string stateValue, out bool enable)
+    {
+        enable = false;
+        if (string.IsNullOrEmpty(stateValue))
+            return false;
+        string value = stateValue.ToLower();
+        if (value == "on" || value == "true" || value == "enable")
+        {
+            enable = true;
+            return true;
+        }
+        if (value == "off" || value == "false" || value == "disable")
+        {
+            enable = false;
+            return true;
+        }
+        return false;
+    }
 }
 
 /// <summary>
@@ -417,14 +853,29 @@ public class VoiceCommandProcessor : MonoBehaviour
 [System.Serializable]
 public class MeshCommand
 {
+    // Core
     public string command;              // Command type (e.g., "move_vertex")
     public string object_name;          // Optional: Name of object to target (e.g., "Cube_1")
+    
+    // Vertex operations
     public int vertex;                  // Single vertex index
     public int[] vertices;              // Multiple vertex indices
+    
+    // Transform values
     public Vector3 offset;              // Offset for movement
     public Vector3 position;            // Absolute position
     public Vector3 rotation;            // Rotation (euler angles)
     public float scale;                 // Uniform scale
     public Vector3 scaleVector;         // Non-uniform scale
+    
+    // Object creation
+    public string primitive_type;       // For spawn_object: "Cube", "Sphere", "Cylinder", "Capsule", "Plane"
+    
+    // Mode control
+    public string mode;                 // For set_mode: "Object" or "Edit"
+    
+    // UI control
+    public bool enable;                 // For toggle commands: true/false
+    public string state;                // For toggle commands: "on", "off", "true", "false", "enable", "disable"
 }
 

@@ -223,7 +223,7 @@ public class EditableMesh : MonoBehaviour
         }
     }
     
-    void ApplyModeActiveStates()
+    public void ApplyModeActiveStates()
     {
         if (mode == DisplayMode.Object)
         {

@@ -13,6 +13,7 @@ This document describes the JSON format your AI/VLM should generate to control m
 4. **Multiple Objects**: Use `object_name` to target specific objects (e.g., "Cube_1", "Sphere_2")
    - If `object_name` is omitted, the command affects the **currently selected** object
    - Object names are shown in the scene and can be queried with voice commands
+5. **On/Off States**: Many toggle commands accept `state` values (`"on"`, `"off"`, `"enable"`, `"disable"`). Omit `state` to toggle.
 
 ## Object Targeting
 
@@ -245,6 +246,166 @@ Objects in scene:
 - Cube_1: 8 vertices, position (0.00, 0.00, 0.00)
 - Sphere_1: 382 vertices, position (2.50, 0.00, 0.00)
 - Cylinder_1: 66 vertices, position (-2.00, 1.00, 0.00)
+```
+
+---
+
+### 11. Spawn Object
+
+Create a new primitive at the origin.
+
+**Voice Example**: "Create a sphere"
+
+**JSON Output**:
+```json
+{
+    "command": "spawn_object",
+    "primitive_type": "Sphere"
+}
+```
+
+**Supported primitive_type values**: `Cube`, `Sphere`, `Cylinder`, `Capsule`, `Plane`
+
+---
+
+### 12. Delete Object
+
+Delete an object by name.
+
+**Voice Example**: "Delete Cube_2"
+
+**JSON Output**:
+```json
+{
+    "command": "delete_object",
+    "object_name": "Cube_2"
+}
+```
+
+---
+
+### 13. Select Object
+
+Programmatically select an object by name (highlights in UI).
+
+**Voice Example**: "Select Sphere_1"
+
+**JSON Output**:
+```json
+{
+    "command": "select_object",
+    "object_name": "Sphere_1"
+}
+```
+
+---
+
+### 14. Set Mode
+
+Switch an object into `Object` or `Edit` mode (matching the in-game Tab behavior).
+
+**Voice Example**: "Put Cube_1 into edit mode"
+
+**JSON Output**:
+```json
+{
+    "command": "set_mode",
+    "object_name": "Cube_1",
+    "mode": "Edit"
+}
+```
+
+Omit `object_name` to affect the currently selected object.
+
+---
+
+### 15. Move Camera
+
+Move the desktop camera to a position or by an offset.
+
+**Voice Example**: "Move the camera back to Z -8"
+
+**JSON Output**:
+```json
+{
+    "command": "move_camera",
+    "position": {"x": 0, "y": 2, "z": -8}
+}
+```
+
+**Relative movement example**:
+```json
+{
+    "command": "move_camera",
+    "offset": {"x": 0, "y": 0, "z": -1}
+}
+```
+
+---
+
+### 16. Toggle Transform Panel
+
+Show or hide the Blender-style transform panel.
+
+**Voice Example**: "Hide the transform panel"
+
+**JSON Output**:
+```json
+{
+    "command": "toggle_transform_panel",
+    "state": "off"
+}
+```
+
+Omit `state` to toggle.
+
+---
+
+### 17. Toggle Orientation Gizmo
+
+Show or hide the orientation gizmo overlay.
+
+**Voice Example**: "Turn on the orientation gizmo"
+
+**JSON Output**:
+```json
+{
+    "command": "toggle_orientation_gizmo",
+    "state": "on"
+}
+```
+
+---
+
+### 18. Toggle Mouse Look
+
+Report or force the mouse-look (crosshair) state.
+
+**Voice Example**: "Enable mouse look"
+
+**JSON Output**:
+```json
+{
+    "command": "toggle_mouse_look",
+    "state": "on"
+}
+```
+
+Omit `state` to simply toggle.
+
+---
+
+### 19. Clear All Objects
+
+Remove every spawned object.
+
+**Voice Example**: "Clear the scene"
+
+**JSON Output**:
+```json
+{
+    "command": "clear_all"
+}
 ```
 
 ---

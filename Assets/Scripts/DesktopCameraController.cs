@@ -214,7 +214,22 @@ public class DesktopCameraController : MonoBehaviour
     {
         return mouseLookEnabled;
     }
-    
+
+    public void ToggleMouseLook()
+    {
+        mouseLookEnabled = !mouseLookEnabled;
+        UpdateCursorState();
+    }
+
+    public void SetMouseLook(bool enabled)
+    {
+        if (mouseLookEnabled != enabled)
+        {
+            mouseLookEnabled = enabled;
+            UpdateCursorState();
+        }
+    }
+
     void OnGUI()
     {
         if (mouseLookEnabled && showCrosshair)

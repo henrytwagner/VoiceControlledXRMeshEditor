@@ -125,7 +125,7 @@ public class ObjectSelector : MonoBehaviour
         
         if (closestObject != null)
         {
-            SelectObject(closestObject);
+            SelectTransform(closestObject);
         }
         else
         {
@@ -140,7 +140,7 @@ public class ObjectSelector : MonoBehaviour
                 }
             }
             
-            DeselectObject();
+            ClearSelection();
         }
     }
     
@@ -177,26 +177,45 @@ public class ObjectSelector : MonoBehaviour
         return currentSelection;
     }
     
-    void SelectObject(Transform obj)
+    public bool SelectTransform(Transform obj)
     {
-        // Don't reselect same object
+        if (obj == null)
+            return false;
+        
         if (currentSelection == obj)
-            return;
+            return true;
         
         // Deselect previous
-        DeselectObject();
+        ClearSelection();
         
         // Select new
         currentSelection = obj;
         
-        // Update transform panel
         if (transformPanel != null)
         {
             transformPanel.SetSelectedObject(obj);
         }
+        
+        return true;
     }
     
-    void DeselectObject()
+    public bool SelectByName(string objectName)
+    {
+        if (string.IsNullOrEmpty(objectName))
+            return false;
+        
+        EditableMesh[] meshes = FindObjectsByType<EditableMesh>(FindObjectsSortMode.None);
+        foreach (EditableMesh mesh in meshes)
+        {
+            if (mesh.gameObject.name == objectName)
+            {
+                return SelectTransform(mesh.transform);
+            }
+        }
+        return false;
+    }
+    
+    public void ClearSelection()
     {
         if (currentSelection != null)
         {
@@ -208,6 +227,5 @@ public class ObjectSelector : MonoBehaviour
             transformPanel.ClearSelection();
         }
     }
-    
 }
 
