@@ -16,6 +16,8 @@ public class ObjectSelector : MonoBehaviour
     [Header("Settings")]
     public float selectRadius = 50f; // Screen-space selection radius in pixels
     public bool autoFindEditableMeshes = true; // Automatically find all EditableMesh objects
+    [Tooltip("Auto-detect crosshair mode based on cursor lock state")]
+    public bool autoDetectCrosshairMode = true;
     
     [Header("Visual Feedback")]
     public bool showSelectionOutline = true;
@@ -38,10 +40,6 @@ public class ObjectSelector : MonoBehaviour
         {
             UpdateCameraReference();
         }
-        
-        // Only select when cursor is not locked (not in camera control mode)
-        if (Cursor.lockState == CursorLockMode.Locked)
-            return;
         
         HandleSelection();
     }
@@ -86,6 +84,15 @@ public class ObjectSelector : MonoBehaviour
         
         if (!clickPressed || raycastCamera == null)
             return;
+        
+        // Auto-detect crosshair mode based on cursor lock state
+        bool useCrosshair = autoDetectCrosshairMode && (Cursor.lockState == CursorLockMode.Locked);
+        
+        if (useCrosshair)
+        {
+            // Use screen center (crosshair position) instead of mouse
+            mousePos = new Vector2(Screen.width / 2f, Screen.height / 2f);
+        }
         
         // Get all selectable objects
         GameObject[] selectableObjects = GetSelectableObjects();

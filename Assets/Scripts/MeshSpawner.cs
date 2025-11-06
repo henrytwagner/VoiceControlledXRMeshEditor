@@ -49,9 +49,11 @@ public class MeshSpawner : MonoBehaviour
         Mesh mesh = GetPrimitiveMesh(primitiveType);
         if (mesh == null)
         {
-            Debug.LogError($"Failed to get mesh for primitive: {primitiveType}");
+            Debug.LogError($"[MeshSpawner] Failed to get mesh for primitive: {primitiveType}");
             return null;
         }
+        
+        Debug.Log($"[MeshSpawner] Got mesh for {primitiveType}: {mesh.name}, vertices: {mesh.vertexCount}, readable: {mesh.isReadable}");
         
         return SpawnMesh(mesh, primitiveType.ToString());
     }
@@ -65,8 +67,8 @@ public class MeshSpawner : MonoBehaviour
         
         if (editableMeshPrefab != null)
         {
-            // Use prefab
-            newObj = Instantiate(editableMeshPrefab);
+            // Use prefab - instantiate at origin with no rotation
+            newObj = Instantiate(editableMeshPrefab, Vector3.zero, Quaternion.identity);
         }
         else
         {
@@ -79,13 +81,17 @@ public class MeshSpawner : MonoBehaviour
         spawnCounter++;
         newObj.name = $"{objectName}_{spawnCounter}";
         
-        // Always spawn at origin (0, 0, 0)
+        // Force spawn at origin (0, 0, 0) - clear parent and set position
+        newObj.transform.SetParent(null);
         newObj.transform.position = spawnPosition;
+        newObj.transform.rotation = Quaternion.identity;
+        newObj.transform.localScale = Vector3.one;
         
         // Configure EditableMesh
         EditableMesh editableMesh = newObj.GetComponent<EditableMesh>();
         if (editableMesh != null)
         {
+            Debug.Log($"[MeshSpawner] Assigning mesh to EditableMesh: {mesh.name}, readable: {mesh.isReadable}");
             editableMesh.sourceMesh = mesh;
             editableMesh.meshMaterial = defaultMaterial;
             editableMesh.vertexMaterial = vertexMaterial;
@@ -129,22 +135,39 @@ public class MeshSpawner : MonoBehaviour
     
     Mesh CreatePrimitiveMesh(PrimitiveType primitiveType)
     {
-        // Create temporary primitive GameObject to extract mesh
+        // Create temporary primitive GameObject
         GameObject temp = GameObject.CreatePrimitive(primitiveType);
-        Mesh mesh = temp.GetComponent<MeshFilter>().sharedMesh;
+        MeshFilter mf = temp.GetComponent<MeshFilter>();
+        Mesh originalMesh = mf.mesh; // Use .mesh (instance) not .sharedMesh
         
-        // Create a copy of the mesh
-        Mesh meshCopy = new Mesh();
-        meshCopy.vertices = mesh.vertices;
-        meshCopy.triangles = mesh.triangles;
-        meshCopy.normals = mesh.normals;
-        meshCopy.uv = mesh.uv;
-        meshCopy.name = $"{primitiveType}_Generated";
+        // The instance mesh (.mesh) is readable, sharedMesh is not
+        Mesh readableMesh = new Mesh();
+        readableMesh.name = $"{primitiveType}_Readable";
+        
+        // Copy all mesh data
+        readableMesh.vertices = originalMesh.vertices;
+        readableMesh.triangles = originalMesh.triangles;
+        readableMesh.normals = originalMesh.normals;
+        readableMesh.uv = originalMesh.uv;
+        
+        if (originalMesh.tangents != null && originalMesh.tangents.Length > 0)
+            readableMesh.tangents = originalMesh.tangents;
+        
+        readableMesh.RecalculateBounds();
         
         // Clean up temp object
+        #if UNITY_EDITOR
+        if (!Application.isPlaying)
+            DestroyImmediate(temp);
+        else
+            Destroy(temp);
+        #else
         Destroy(temp);
+        #endif
         
-        return meshCopy;
+        Debug.Log($"[MeshSpawner] Created readable {primitiveType} mesh: {readableMesh.vertexCount} vertices, readable: {readableMesh.isReadable}");
+        
+        return readableMesh;
     }
     
     /// <summary>

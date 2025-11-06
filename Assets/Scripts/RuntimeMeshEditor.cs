@@ -26,18 +26,23 @@ public class RuntimeMeshEditor : MonoBehaviour
     public bool useSelectedObject = true; // Use ObjectSelector's selected object instead of fixed targetMesh
     
     [Header("Settings")]
+    [Tooltip("Auto-detect crosshair mode based on cursor lock state")]
+    public bool autoDetectCrosshairMode = true;
+    [Tooltip("Manual override: Use crosshair at screen center (only if autoDetect is false)")]
+    public bool useCrosshairSelection = true;
     [Tooltip("Selection radius in screen pixels")]
     public float selectRadius = 500f;
     public Color selectedColor = Color.yellow;
     public Color normalColor = Color.white;
-    public bool disableCameraInVertexMode = true;
+    [Tooltip("Disable mouse look in edit mode (keeps WASD movement)")]
+    public bool disableMouseLookInEditMode = true;
     public bool showLabels = true;
     
     [Header("Mesh Transformation")]
     [Tooltip("Keys to toggle transformation modes")]
-    public KeyCode translateKey = KeyCode.M;
-    public KeyCode rotateKey = KeyCode.R;
-    public KeyCode scaleKey = KeyCode.S;
+    public KeyCode translateKey = KeyCode.Z;
+    public KeyCode rotateKey = KeyCode.X;
+    public KeyCode scaleKey = KeyCode.C;
     public Color transformModeColor = Color.green;
     public float rotationSensitivity = 0.5f;
     public float scaleSensitivity = 0.002f;
@@ -61,6 +66,7 @@ public class RuntimeMeshEditor : MonoBehaviour
     private Quaternion transformStartRot;
     private Vector3 transformStartScale;
     private Vector2 transformStartMousePos;
+    private bool wasInMouseLookMode = false; // Track if we were in mouse look before transform
     
     void Awake()
     {
@@ -216,11 +222,7 @@ public class RuntimeMeshEditor : MonoBehaviour
             lastMode = targetMesh.mode;
         }
         
-        // Only allow editing in Edit mode
-        if (targetMesh.mode != EditableMesh.DisplayMode.Edit)
-            return;
-        
-        // Handle transform mode toggle (only when in editing mode)
+        // Handle transform mode toggle (available in both Object and Edit modes)
         HandleTransformModeToggle();
         
         // Handle different transform modes
@@ -237,8 +239,12 @@ public class RuntimeMeshEditor : MonoBehaviour
                 break;
             case TransformMode.Vertices:
             default:
-                HandleVertexSelection();
-                HandleVertexDrag();
+                // Vertex editing only available in Edit mode
+                if (targetMesh.mode == EditableMesh.DisplayMode.Edit)
+                {
+                    HandleVertexSelection();
+                    HandleVertexDrag();
+                }
                 break;
         }
     }
@@ -247,21 +253,18 @@ public class RuntimeMeshEditor : MonoBehaviour
     {
         bool isEditMode = (newMode == EditableMesh.DisplayMode.Edit);
         
-        if (disableCameraInVertexMode && cameraController != null)
-        {
-            cameraController.enabled = !isEditMode;
-        }
-        
         if (isEditMode)
         {
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
+            // Don't touch cursor state - let DesktopCameraController handle it
+            // User can toggle mouse look with Alt to use crosshair for vertex selection
+            Debug.Log("[RuntimeMeshEditor] Edit mode: Vertex editing enabled, Z/X/C for transform");
         }
         else
         {
+            // Exiting Edit mode - clear vertex selection but keep M/R/S modes available
             Deselect();
-            currentTransformMode = TransformMode.Vertices; // Reset to vertex mode
             isDraggingTransform = false;
+            Debug.Log("[RuntimeMeshEditor] Object mode: Z/X/C available for whole-mesh transform");
         }
     }
     
@@ -276,9 +279,9 @@ public class RuntimeMeshEditor : MonoBehaviour
         Keyboard keyboard = Keyboard.current;
         if (keyboard != null)
         {
-            translatePressed = keyboard.mKey.wasPressedThisFrame;
-            rotatePressed = keyboard.rKey.wasPressedThisFrame;
-            scalePressed = keyboard.sKey.wasPressedThisFrame;
+            translatePressed = keyboard.zKey.wasPressedThisFrame;
+            rotatePressed = keyboard.xKey.wasPressedThisFrame;
+            scalePressed = keyboard.cKey.wasPressedThisFrame;
             escPressed = keyboard.escapeKey.wasPressedThisFrame;
         }
         #else
@@ -349,9 +352,16 @@ public class RuntimeMeshEditor : MonoBehaviour
         
         if (clickPressed && !isDraggingTransform)
         {
-            // Start dragging
             isDraggingTransform = true;
             transformStartPos = targetMesh.transform.position;
+            
+            // Unlock cursor for mouse transformation
+            wasInMouseLookMode = (Cursor.lockState == CursorLockMode.Locked);
+            if (wasInMouseLookMode)
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
             
             #if ENABLE_INPUT_SYSTEM
             Vector2 mousePos = Mouse.current?.position.ReadValue() ?? Vector2.zero;
@@ -363,13 +373,18 @@ public class RuntimeMeshEditor : MonoBehaviour
         
         if (clickReleased && isDraggingTransform)
         {
-            // Stop dragging
             isDraggingTransform = false;
+            
+            // Re-lock cursor if we were in mouse look mode
+            if (wasInMouseLookMode)
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
         }
         
         if (isDraggingTransform && clickHeld)
         {
-            // Calculate mouse movement in screen space
             #if ENABLE_INPUT_SYSTEM
             Vector2 currentMousePos = Mouse.current?.position.ReadValue() ?? Vector2.zero;
             #else
@@ -378,19 +393,13 @@ public class RuntimeMeshEditor : MonoBehaviour
             
             Vector2 mouseDelta = currentMousePos - transformStartMousePos;
             
-            // Convert screen delta to world movement
-            // Use camera's right/up vectors for movement
             Vector3 right = editCamera.transform.right;
             Vector3 up = editCamera.transform.up;
             
-            // Scale based on distance from camera
             float distance = Vector3.Distance(editCamera.transform.position, targetMesh.transform.position);
-            float sensitivity = distance * 0.001f; // Adjust sensitivity as needed
+            float sensitivity = distance * 0.001f;
             
-            // Fixed: Remove the negative sign for Y movement (mouse up = object up)
             Vector3 worldDelta = (right * mouseDelta.x + up * mouseDelta.y) * sensitivity;
-            
-            // This modifies the actual GameObject Transform, not individual vertices
             targetMesh.transform.position = transformStartPos + worldDelta;
         }
     }
@@ -423,6 +432,14 @@ public class RuntimeMeshEditor : MonoBehaviour
             isDraggingTransform = true;
             transformStartRot = targetMesh.transform.rotation;
             
+            // Unlock cursor for mouse transformation
+            wasInMouseLookMode = (Cursor.lockState == CursorLockMode.Locked);
+            if (wasInMouseLookMode)
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
+            
             #if ENABLE_INPUT_SYSTEM
             Vector2 mousePos = Mouse.current?.position.ReadValue() ?? Vector2.zero;
             #else
@@ -434,6 +451,13 @@ public class RuntimeMeshEditor : MonoBehaviour
         if (clickReleased && isDraggingTransform)
         {
             isDraggingTransform = false;
+            
+            // Re-lock cursor if we were in mouse look mode
+            if (wasInMouseLookMode)
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
         }
         
         if (isDraggingTransform && clickHeld)
@@ -446,11 +470,9 @@ public class RuntimeMeshEditor : MonoBehaviour
             
             Vector2 mouseDelta = currentMousePos - transformStartMousePos;
             
-            // Mouse X rotates around Y axis (yaw), Mouse Y rotates around X axis (pitch)
             float yawDelta = mouseDelta.x * rotationSensitivity;
             float pitchDelta = -mouseDelta.y * rotationSensitivity;
             
-            // Apply rotation relative to camera view
             Quaternion yawRotation = Quaternion.AngleAxis(yawDelta, Vector3.up);
             Quaternion pitchRotation = Quaternion.AngleAxis(pitchDelta, editCamera.transform.right);
             
@@ -486,6 +508,14 @@ public class RuntimeMeshEditor : MonoBehaviour
             isDraggingTransform = true;
             transformStartScale = targetMesh.transform.localScale;
             
+            // Unlock cursor for mouse transformation
+            wasInMouseLookMode = (Cursor.lockState == CursorLockMode.Locked);
+            if (wasInMouseLookMode)
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
+            
             #if ENABLE_INPUT_SYSTEM
             Vector2 mousePos = Mouse.current?.position.ReadValue() ?? Vector2.zero;
             #else
@@ -497,6 +527,13 @@ public class RuntimeMeshEditor : MonoBehaviour
         if (clickReleased && isDraggingTransform)
         {
             isDraggingTransform = false;
+            
+            // Re-lock cursor if we were in mouse look mode
+            if (wasInMouseLookMode)
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
         }
         
         if (isDraggingTransform && clickHeld)
@@ -509,11 +546,8 @@ public class RuntimeMeshEditor : MonoBehaviour
             
             Vector2 mouseDelta = currentMousePos - transformStartMousePos;
             
-            // Use mouse Y for uniform scaling (drag up = bigger, drag down = smaller)
             float scaleDelta = mouseDelta.y * scaleSensitivity;
             float scaleMultiplier = 1.0f + scaleDelta;
-            
-            // Clamp to prevent negative or zero scale
             scaleMultiplier = Mathf.Max(scaleMultiplier, 0.01f);
             
             Vector3 newScale = transformStartScale * scaleMultiplier;
@@ -537,7 +571,61 @@ public class RuntimeMeshEditor : MonoBehaviour
         if (!clickPressed)
             return;
         
-        // Find closest vertex
+        // Auto-detect mode based on cursor state, or use manual setting
+        bool useCrosshair = autoDetectCrosshairMode ? 
+            (Cursor.lockState == CursorLockMode.Locked) : 
+            useCrosshairSelection;
+        
+        if (useCrosshair)
+        {
+            HandleRaycastSelection();
+        }
+        else
+        {
+            HandleMouseSelection();
+        }
+    }
+    
+    void HandleRaycastSelection()
+    {
+        // Use screen center (crosshair position) as "mouse" position
+        Vector2 crosshairPos = new Vector2(Screen.width / 2f, Screen.height / 2f);
+        
+        Vector3[] vertices = targetMesh.GetVertices();
+        Transform meshTransform = targetMesh.transform;
+        
+        float closestDist = float.MaxValue;
+        int closestIndex = -1;
+        
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            Vector3 worldPos = meshTransform.TransformPoint(vertices[i]);
+            Vector3 screenPos = editCamera.WorldToScreenPoint(worldPos);
+            
+            if (screenPos.z < 0) continue; // Behind camera
+            
+            float dist = Vector2.Distance(new Vector2(screenPos.x, screenPos.y), crosshairPos);
+            
+            if (dist < selectRadius && dist < closestDist)
+            {
+                closestDist = dist;
+                closestIndex = i;
+            }
+        }
+        
+        if (closestIndex >= 0)
+        {
+            SelectVertex(closestIndex);
+        }
+        else
+        {
+            Deselect();
+        }
+    }
+    
+    void HandleMouseSelection()
+    {
+        // Original screen-space selection
         Vector3[] vertices = targetMesh.GetVertices();
         Transform meshTransform = targetMesh.transform;
         
@@ -650,13 +738,29 @@ public class RuntimeMeshEditor : MonoBehaviour
         if (editCamera == null)
             return new Ray(Vector3.zero, Vector3.forward);
         
-        #if ENABLE_INPUT_SYSTEM
-        Vector2 mousePos = Mouse.current?.position.ReadValue() ?? Vector2.zero;
-        #else
-        Vector2 mousePos = Input.mousePosition;
-        #endif
+        Vector2 screenPos;
         
-        return editCamera.ScreenPointToRay(mousePos);
+        // Auto-detect mode based on cursor state, or use manual setting
+        bool useCrosshair = autoDetectCrosshairMode ? 
+            (Cursor.lockState == CursorLockMode.Locked) : 
+            useCrosshairSelection;
+        
+        if (useCrosshair)
+        {
+            // Use crosshair at screen center
+            screenPos = new Vector2(Screen.width / 2f, Screen.height / 2f);
+        }
+        else
+        {
+            // Use mouse cursor position
+            #if ENABLE_INPUT_SYSTEM
+            screenPos = Mouse.current?.position.ReadValue() ?? Vector2.zero;
+            #else
+            screenPos = Input.mousePosition;
+            #endif
+        }
+        
+        return editCamera.ScreenPointToRay(screenPos);
     }
     
     void OnGUI()
@@ -715,8 +819,13 @@ public class RuntimeMeshEditor : MonoBehaviour
         
         GUI.Box(new Rect(10, 10, 250, 30), $"Mode: {modeText}", modeStyle);
         
-        string instructions = "M = Translate | R = Rotate | S = Scale\nESC = Vertices | Tab = Exit";
-        GUI.Box(new Rect(10, 50, 300, 60), instructions, boxStyle);
+        // Show current control mode
+        bool isUsingCrosshair = autoDetectCrosshairMode ? 
+            (Cursor.lockState == CursorLockMode.Locked) : 
+            useCrosshairSelection;
+        string selectionMode = isUsingCrosshair ? "Crosshair" : "Mouse Cursor";
+        string instructions = $"Control: {selectionMode} (Alt to toggle)\nZ=Translate | X=Rotate | C=Scale\nWASD=Move | Q/E=Up/Down | Tab=Exit";
+        GUI.Box(new Rect(10, 50, 350, 80), instructions, boxStyle);
         
         if (currentTransformMode == TransformMode.Vertices && selectedVertexIndex >= 0)
         {

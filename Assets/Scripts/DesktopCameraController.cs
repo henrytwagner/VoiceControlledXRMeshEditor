@@ -41,6 +41,13 @@ public class DesktopCameraController : MonoBehaviour
     [Tooltip("Key to toggle mouse look on/off")]
     public KeyCode toggleMouseLookKey = KeyCode.LeftAlt;
     
+    [Header("Crosshair")]
+    [Tooltip("Show crosshair when mouse look is active")]
+    public bool showCrosshair = true;
+    public Color crosshairColor = new Color(1f, 1f, 1f, 0.8f);
+    public float crosshairSize = 10f;
+    public float crosshairThickness = 2f;
+    
     // Private state
     private Vector3 currentVelocity;
     private float pitch = 0f;
@@ -56,7 +63,9 @@ public class DesktopCameraController : MonoBehaviour
     {
         HandleMouseLookToggle();
         
-        if (mouseLookEnabled)
+        // Only handle mouse look if enabled AND cursor is actually locked
+        // This prevents mouse look from interfering with UI interactions or object transformations
+        if (mouseLookEnabled && Cursor.lockState == CursorLockMode.Locked)
         {
             HandleLook();
         }
@@ -209,8 +218,11 @@ public class DesktopCameraController : MonoBehaviour
     
     void OnGUI()
     {
-        // Show mouse look status
-        if (!mouseLookEnabled)
+        if (mouseLookEnabled && showCrosshair)
+        {
+            DrawCrosshair();
+        }
+        else if (!mouseLookEnabled)
         {
             GUIStyle style = new GUIStyle(GUI.skin.box);
             style.normal.textColor = Color.cyan;
@@ -224,6 +236,35 @@ public class DesktopCameraController : MonoBehaviour
             
             GUI.Box(new Rect(pos.x, pos.y, size.x, size.y), message, style);
         }
+    }
+    
+    void DrawCrosshair()
+    {
+        float centerX = Screen.width / 2f;
+        float centerY = Screen.height / 2f;
+        
+        // Create texture for crosshair if needed
+        Texture2D lineTexture = new Texture2D(1, 1);
+        lineTexture.SetPixel(0, 0, crosshairColor);
+        lineTexture.Apply();
+        
+        // Draw horizontal line
+        GUI.DrawTexture(
+            new Rect(centerX - crosshairSize, centerY - crosshairThickness / 2, crosshairSize * 2, crosshairThickness),
+            lineTexture
+        );
+        
+        // Draw vertical line
+        GUI.DrawTexture(
+            new Rect(centerX - crosshairThickness / 2, centerY - crosshairSize, crosshairThickness, crosshairSize * 2),
+            lineTexture
+        );
+        
+        // Draw center dot
+        GUI.DrawTexture(
+            new Rect(centerX - 1, centerY - 1, 2, 2),
+            lineTexture
+        );
     }
 }
 
