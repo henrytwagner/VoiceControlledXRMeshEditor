@@ -54,7 +54,7 @@ public class TransformPanel : MonoBehaviour
         
         // Auto-find EditableMesh reference (but don't auto-select it)
         if (editableMesh == null)
-            editableMesh = FindObjectOfType<EditableMesh>();
+            editableMesh = FindAnyObjectByType<EditableMesh>();
         
         showPanel = showOnStart;
     }

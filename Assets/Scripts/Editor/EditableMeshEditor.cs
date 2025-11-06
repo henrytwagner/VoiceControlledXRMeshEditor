@@ -19,8 +19,8 @@ public class EditableMeshEditor : Editor
     {
         EditableMesh mesh = (EditableMesh)target;
         
-        // Only show handles in Vertices mode
-        if (mesh.mode != EditableMesh.DisplayMode.Vertices)
+        // Only show handles in Edit mode
+        if (mesh.mode != EditableMesh.DisplayMode.Edit)
             return;
         
         Transform meshTransform = mesh.transform;
@@ -115,7 +115,7 @@ public class EditableMeshEditor : Editor
         
         EditorGUILayout.Space();
         EditorGUILayout.HelpBox(
-            "Switch to Vertices mode to edit.\n" +
+            "Switch to Edit mode to edit.\n" +
             "In Scene view:\n" +
             "• Press 'G' to toggle between Move Whole Mesh and Move Vertices\n" +
             "• Drag handles to move vertices or entire mesh", 

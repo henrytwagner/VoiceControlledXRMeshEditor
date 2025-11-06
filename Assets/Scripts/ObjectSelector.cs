@@ -15,22 +15,20 @@ public class ObjectSelector : MonoBehaviour
     
     [Header("Settings")]
     public float selectRadius = 50f; // Screen-space selection radius in pixels
-    public string[] selectableObjectNames = new string[] { "EditableMesh", "EditableCube" };
+    public bool autoFindEditableMeshes = true; // Automatically find all EditableMesh objects
     
     [Header("Visual Feedback")]
     public bool showSelectionOutline = true;
     public Color selectionColor = Color.yellow;
     
     private Transform currentSelection;
-    private Renderer selectedRenderer;
-    private Color originalOutlineColor;
     
     void Start()
     {
         UpdateCameraReference();
         
         if (transformPanel == null)
-            transformPanel = FindObjectOfType<TransformPanel>();
+            transformPanel = FindAnyObjectByType<TransformPanel>();
     }
     
     void Update()
@@ -89,12 +87,8 @@ public class ObjectSelector : MonoBehaviour
         if (!clickPressed || raycastCamera == null)
             return;
         
-        // Use screen-space distance method (same as vertex selection - much more reliable!)
-        GameObject[] selectableObjects = new GameObject[selectableObjectNames.Length];
-        for (int i = 0; i < selectableObjectNames.Length; i++)
-        {
-            selectableObjects[i] = GameObject.Find(selectableObjectNames[i]);
-        }
+        // Get all selectable objects
+        GameObject[] selectableObjects = GetSelectableObjects();
         
         float closestDist = float.MaxValue;
         Transform closestObject = null;
@@ -128,8 +122,52 @@ public class ObjectSelector : MonoBehaviour
         }
         else
         {
+            // Don't deselect if current selection is in edit mode
+            if (currentSelection != null)
+            {
+                EditableMesh mesh = currentSelection.GetComponent<EditableMesh>();
+                if (mesh != null && mesh.mode == EditableMesh.DisplayMode.Edit)
+                {
+                    // Keep selection - can't deselect while in edit mode
+                    return;
+                }
+            }
+            
             DeselectObject();
         }
+    }
+    
+    GameObject[] GetSelectableObjects()
+    {
+        if (autoFindEditableMeshes)
+        {
+            // Find all EditableMesh components in scene
+            EditableMesh[] meshes = FindObjectsByType<EditableMesh>(FindObjectsSortMode.None);
+            GameObject[] objects = new GameObject[meshes.Length];
+            for (int i = 0; i < meshes.Length; i++)
+            {
+                objects[i] = meshes[i].gameObject;
+            }
+            return objects;
+        }
+        
+        return new GameObject[0];
+    }
+    
+    /// <summary>
+    /// For TopMenuBar to notify when new objects are created
+    /// </summary>
+    public void AddSelectableObject(string objectName)
+    {
+        // This method exists for API compatibility but isn't needed with auto-find
+    }
+    
+    /// <summary>
+    /// Get currently selected object (for EditableMesh to check if it's selected)
+    /// </summary>
+    public Transform GetCurrentSelection()
+    {
+        return currentSelection;
     }
     
     void SelectObject(Transform obj)
@@ -156,7 +194,6 @@ public class ObjectSelector : MonoBehaviour
         if (currentSelection != null)
         {
             currentSelection = null;
-            selectedRenderer = null;
         }
         
         if (transformPanel != null)

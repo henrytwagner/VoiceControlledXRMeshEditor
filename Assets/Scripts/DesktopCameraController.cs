@@ -36,7 +36,7 @@ public class DesktopCameraController : MonoBehaviour
     
     [Header("Mouse Look")]
     [Tooltip("Enable mouse look on start")]
-    public bool mouseLookOnStart = true;
+    public bool mouseLookOnStart = false;
     
     [Tooltip("Key to toggle mouse look on/off")]
     public KeyCode toggleMouseLookKey = KeyCode.LeftAlt;

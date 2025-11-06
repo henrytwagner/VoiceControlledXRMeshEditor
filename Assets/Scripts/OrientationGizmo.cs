@@ -99,7 +99,7 @@ public class OrientationGizmo : MonoBehaviour
         // Priority 3: Any active camera
         if (newCamera == null)
         {
-            Camera[] cameras = FindObjectsOfType<Camera>();
+            Camera[] cameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
             foreach (Camera cam in cameras)
             {
                 if (cam.enabled && cam.gameObject.activeInHierarchy)

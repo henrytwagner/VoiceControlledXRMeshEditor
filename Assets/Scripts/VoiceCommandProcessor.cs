@@ -30,7 +30,7 @@ public class VoiceCommandProcessor : MonoBehaviour
     void Start()
     {
         if (targetMesh == null)
-            targetMesh = FindObjectOfType<EditableMesh>();
+            targetMesh = FindAnyObjectByType<EditableMesh>();
     }
     
     #region JSON Command Processing

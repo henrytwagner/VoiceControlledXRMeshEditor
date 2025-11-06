@@ -22,7 +22,7 @@ public class VoiceCommandTester : MonoBehaviour
     void Start()
     {
         if (commandProcessor == null)
-            commandProcessor = FindObjectOfType<VoiceCommandProcessor>();
+            commandProcessor = FindAnyObjectByType<VoiceCommandProcessor>();
     }
     
     void Update()

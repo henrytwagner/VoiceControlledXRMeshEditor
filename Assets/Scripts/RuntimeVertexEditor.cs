@@ -71,7 +71,7 @@ public class RuntimeVertexEditor : MonoBehaviour
         // If no desktop camera, find any active camera
         if (activeCamera == null)
         {
-            Camera[] cameras = FindObjectsOfType<Camera>();
+            Camera[] cameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
             foreach (Camera cam in cameras)
             {
                 if (cam.enabled && cam.gameObject.activeInHierarchy)
@@ -97,7 +97,7 @@ public class RuntimeVertexEditor : MonoBehaviour
             
         if (targetCube == null)
         {
-            targetCube = FindObjectOfType<EditableCube>();
+            targetCube = FindAnyObjectByType<EditableCube>();
             Debug.Log("[RuntimeVertexEditor] Auto-found EditableCube: " + (targetCube != null ? targetCube.name : "NULL"));
         }
         
@@ -118,7 +118,7 @@ public class RuntimeVertexEditor : MonoBehaviour
         if (cameraController == null)
         {
             // Try to find it - also check disabled objects
-            cameraController = FindObjectOfType<DesktopCameraController>(true); // Include inactive
+            cameraController = FindFirstObjectByType<DesktopCameraController>(FindObjectsInactive.Include);
             
             if (cameraController == null)
             {

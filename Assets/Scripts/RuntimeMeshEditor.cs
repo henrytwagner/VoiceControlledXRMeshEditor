@@ -8,13 +8,22 @@ using UnityEngine.InputSystem;
 /// Runtime editor for EditableMesh - works with any imported mesh.
 /// Press Tab to toggle Mesh/Vertex modes.
 /// Click and drag vertices to edit in Play mode.
+/// 
+/// IMPORTANT: This should be on a SEPARATE manager GameObject (like "MeshEditor" or "UIManager"),
+/// NOT on the same GameObject as EditableMesh. If it's on the EditableMesh GameObject and that
+/// object gets disabled, vertex editing will break.
 /// </summary>
 public class RuntimeMeshEditor : MonoBehaviour
 {
     [Header("References")]
-    public EditableMesh targetMesh;
+    [Tooltip("LEGACY: Leave empty if using auto-selection. Should be on separate GameObject from EditableMesh!")]
+    public EditableMesh targetMesh; // Legacy: set this manually OR use auto-selection
     public Camera editCamera;
     public DesktopCameraController cameraController;
+    public ObjectSelector objectSelector;
+    
+    [Header("Auto-Selection")]
+    public bool useSelectedObject = true; // Use ObjectSelector's selected object instead of fixed targetMesh
     
     [Header("Settings")]
     [Tooltip("Selection radius in screen pixels")]
@@ -55,6 +64,15 @@ public class RuntimeMeshEditor : MonoBehaviour
     
     void Awake()
     {
+        // Warn if RuntimeMeshEditor is on the same GameObject as an EditableMesh
+        EditableMesh meshOnSameObject = GetComponent<EditableMesh>();
+        if (meshOnSameObject != null)
+        {
+            Debug.LogWarning($"[RuntimeMeshEditor] WARNING: RuntimeMeshEditor is on the same GameObject as EditableMesh ({gameObject.name}). " +
+                           "This will cause vertex editing to break if the EditableMesh GameObject is disabled. " +
+                           "Move RuntimeMeshEditor to a separate manager GameObject (like 'MeshEditor' or 'UIManager').");
+        }
+        
         Debug.Log("[RuntimeMeshEditor] Initialized");
     }
     
@@ -88,7 +106,7 @@ public class RuntimeMeshEditor : MonoBehaviour
         // Fallback to any active camera
         if (activeCamera == null)
         {
-            Camera[] cameras = FindObjectsOfType<Camera>();
+            Camera[] cameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
             foreach (Camera cam in cameras)
             {
                 if (cam.enabled && cam.gameObject.activeInHierarchy)
@@ -105,19 +123,89 @@ public class RuntimeMeshEditor : MonoBehaviour
     
     void FindComponents()
     {
-        if (targetMesh == null)
-            targetMesh = FindObjectOfType<EditableMesh>();
+        if (targetMesh == null && !useSelectedObject)
+            targetMesh = FindAnyObjectByType<EditableMesh>();
         
         if (cameraController == null)
-            cameraController = FindObjectOfType<DesktopCameraController>(true);
+            cameraController = FindFirstObjectByType<DesktopCameraController>(FindObjectsInactive.Include);
+        
+        if (objectSelector == null)
+            objectSelector = FindAnyObjectByType<ObjectSelector>();
+    }
+    
+    void UpdateTargetMesh()
+    {
+        if (!useSelectedObject)
+            return;
+        
+        // Find ObjectSelector if we don't have it
+        if (objectSelector == null)
+        {
+            objectSelector = FindAnyObjectByType<ObjectSelector>();
+            if (objectSelector == null)
+            {
+                Debug.LogWarning("[RuntimeMeshEditor] No ObjectSelector found! Vertex editing requires ObjectSelector.");
+                return;
+            }
+        }
+        
+        // Use ObjectSelector's selected object if available
+        Transform selected = objectSelector.GetCurrentSelection();
+        if (selected != null)
+        {
+            EditableMesh mesh = selected.GetComponent<EditableMesh>();
+            if (mesh != null && mesh != targetMesh)
+            {
+                // Switched to a different mesh
+                Deselect(); // Clear previous vertex selection
+                targetMesh = mesh;
+                lastMode = mesh.mode;
+                Debug.Log($"[RuntimeMeshEditor] Now editing: {mesh.gameObject.name}");
+            }
+        }
+        else if (targetMesh == null)
+        {
+            // No selection and no target mesh - try to find any active EditableMesh
+            EditableMesh anyMesh = FindAnyObjectByType<EditableMesh>();
+            if (anyMesh != null)
+            {
+                targetMesh = anyMesh;
+                lastMode = anyMesh.mode;
+                Debug.Log($"[RuntimeMeshEditor] Auto-selected first mesh: {anyMesh.gameObject.name}");
+            }
+        }
     }
     
     void Update()
     {
-        if (targetMesh == null)
-            return;
+        // Always update camera and components in case they change
+        if (editCamera == null || !editCamera.gameObject.activeInHierarchy || !editCamera.enabled)
+        {
+            UpdateEditCamera();
+        }
         
-        // Update camera if needed
+        // Find components if missing (they might be on disabled objects)
+        if (objectSelector == null || cameraController == null)
+        {
+            FindComponents();
+        }
+        
+        // Update target mesh based on selection
+        UpdateTargetMesh();
+        
+        // Exit early if no target mesh
+        if (targetMesh == null)
+        {
+            // Try one more time to find a mesh if useSelectedObject is false
+            if (!useSelectedObject)
+            {
+                targetMesh = FindAnyObjectByType<EditableMesh>();
+            }
+            if (targetMesh == null)
+                return;
+        }
+        
+        // Update camera if needed (double-check after finding mesh)
         if (editCamera == null || !editCamera.enabled)
             UpdateEditCamera();
         
@@ -128,8 +216,8 @@ public class RuntimeMeshEditor : MonoBehaviour
             lastMode = targetMesh.mode;
         }
         
-        // Only allow editing in Vertices mode
-        if (targetMesh.mode != EditableMesh.DisplayMode.Vertices)
+        // Only allow editing in Edit mode
+        if (targetMesh.mode != EditableMesh.DisplayMode.Edit)
             return;
         
         // Handle transform mode toggle (only when in editing mode)
@@ -157,14 +245,14 @@ public class RuntimeMeshEditor : MonoBehaviour
     
     void OnModeChanged(EditableMesh.DisplayMode newMode)
     {
-        bool isVertexMode = (newMode == EditableMesh.DisplayMode.Vertices);
+        bool isEditMode = (newMode == EditableMesh.DisplayMode.Edit);
         
         if (disableCameraInVertexMode && cameraController != null)
         {
-            cameraController.enabled = !isVertexMode;
+            cameraController.enabled = !isEditMode;
         }
         
-        if (isVertexMode)
+        if (isEditMode)
         {
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
@@ -576,9 +664,9 @@ public class RuntimeMeshEditor : MonoBehaviour
         if (targetMesh == null || editCamera == null || !showLabels)
             return;
         
-        bool inVertexMode = (targetMesh.mode == EditableMesh.DisplayMode.Vertices);
+        bool inEditMode = (targetMesh.mode == EditableMesh.DisplayMode.Edit);
         
-        if (!inVertexMode)
+        if (!inEditMode)
             return;
         
         // Draw vertex labels
@@ -653,8 +741,8 @@ public class RuntimeMeshEditor : MonoBehaviour
         if (!showEdges || targetMesh == null || showInGameView)
             return;
         
-        bool inVertexMode = (targetMesh.mode == EditableMesh.DisplayMode.Vertices);
-        if (!inVertexMode)
+        bool inEditMode = (targetMesh.mode == EditableMesh.DisplayMode.Edit);
+        if (!inEditMode)
             return;
         
         DrawMeshEdges();
@@ -665,8 +753,8 @@ public class RuntimeMeshEditor : MonoBehaviour
         if (!showEdges || !showInGameView || targetMesh == null)
             return;
         
-        bool inVertexMode = (targetMesh.mode == EditableMesh.DisplayMode.Vertices);
-        if (!inVertexMode || !Application.isPlaying)
+        bool inEditMode = (targetMesh.mode == EditableMesh.DisplayMode.Edit);
+        if (!inEditMode || !Application.isPlaying)
             return;
         
         // Use GL to draw lines in Game view
@@ -787,4 +875,5 @@ public class RuntimeMeshEditor : MonoBehaviour
             DestroyImmediate(lineMaterial);
     }
 }
+
 

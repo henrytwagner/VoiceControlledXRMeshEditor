@@ -10,10 +10,10 @@ using System.Linq;
 [ExecuteAlways]
 public class EditableMesh : MonoBehaviour
 {
-    public enum DisplayMode { Mesh, Vertices }
+    public enum DisplayMode { Object, Edit }
     
     [Header("Mode")]
-    public DisplayMode mode = DisplayMode.Mesh;
+    public DisplayMode mode = DisplayMode.Object;
     
     [Header("Source Mesh")]
     [Tooltip("The imported mesh to make editable (drag from Project)")]
@@ -35,9 +35,10 @@ public class EditableMesh : MonoBehaviour
     [Header("Hotkeys (Play Mode)")]
     public bool enableHotkey = true;
     public KeyCode toggleModeKey = KeyCode.Tab;
+    public bool requireSelectionToEdit = true; // Only toggle mode when selected
     
     [Header("Origin Indicator")]
-    public bool showOriginInMeshMode = true;
+    public bool showOriginInObjectMode = true;
     public float originDotSize = 6f; // Pixels
     public Color originColor = new Color(1f, 0.8f, 0.2f, 0.8f); // Orange/yellow
     public bool showOriginInGameView = true;
@@ -144,6 +145,7 @@ public class EditableMesh : MonoBehaviour
         if (!Application.isPlaying || !enableHotkey)
             return;
         
+        // Check if Tab is pressed
         bool pressed = false;
         #if ENABLE_INPUT_SYSTEM
         pressed = UnityEngine.InputSystem.Keyboard.current?[UnityEngine.InputSystem.Key.Tab].wasPressedThisFrame ?? false;
@@ -152,12 +154,32 @@ public class EditableMesh : MonoBehaviour
         #endif
         
         if (pressed)
-            ToggleMode();
+        {
+            // Only toggle if this mesh is selected (or selection requirement is disabled)
+            if (!requireSelectionToEdit || IsThisObjectSelected())
+            {
+                ToggleMode();
+            }
+        }
+    }
+    
+    bool IsThisObjectSelected()
+    {
+        // Check if this mesh is currently selected by ObjectSelector
+        ObjectSelector selector = FindAnyObjectByType<ObjectSelector>();
+        if (selector != null)
+        {
+            Transform selected = selector.GetCurrentSelection();
+            return selected == transform || selected == transform.parent;
+        }
+        
+        // If no selector, allow toggle (backward compatibility)
+        return true;
     }
     
     public void ToggleMode()
     {
-        mode = (mode == DisplayMode.Mesh) ? DisplayMode.Vertices : DisplayMode.Mesh;
+        mode = (mode == DisplayMode.Object) ? DisplayMode.Edit : DisplayMode.Object;
         ApplyModeActiveStates();
     }
     
@@ -203,14 +225,14 @@ public class EditableMesh : MonoBehaviour
     
     void ApplyModeActiveStates()
     {
-        if (mode == DisplayMode.Mesh)
+        if (mode == DisplayMode.Object)
         {
             if (meshRoot) meshRoot.gameObject.SetActive(true);
             if (vertsRoot) vertsRoot.gameObject.SetActive(false);
             if (meshRenderer && meshMaterial)
                 meshRenderer.sharedMaterial = meshMaterial;
         }
-        else // Vertices
+        else // Edit mode
         {
             if (vertsRoot) vertsRoot.gameObject.SetActive(true);
             
@@ -433,7 +455,7 @@ public class EditableMesh : MonoBehaviour
     // Draw origin indicator
     void OnDrawGizmos()
     {
-        if (showOriginInMeshMode && showOriginInSceneView && mode == DisplayMode.Mesh)
+        if (showOriginInObjectMode && showOriginInSceneView && mode == DisplayMode.Object)
         {
             DrawOriginGizmoScene();
         }
@@ -441,7 +463,7 @@ public class EditableMesh : MonoBehaviour
     
     void OnGUI()
     {
-        if (showOriginInMeshMode && showOriginInGameView && mode == DisplayMode.Mesh)
+        if (showOriginInObjectMode && showOriginInGameView && mode == DisplayMode.Object)
         {
             DrawOriginDot();
         }
@@ -453,7 +475,7 @@ public class EditableMesh : MonoBehaviour
         Camera cam = Camera.main;
         if (cam == null)
         {
-            Camera[] cameras = FindObjectsOfType<Camera>();
+            Camera[] cameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
             foreach (Camera c in cameras)
             {
                 if (c.enabled && c.gameObject.activeInHierarchy)
