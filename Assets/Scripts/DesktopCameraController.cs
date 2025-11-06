@@ -91,7 +91,6 @@ public class DesktopCameraController : MonoBehaviour
         {
             mouseLookEnabled = !mouseLookEnabled;
             UpdateCursorState();
-            Debug.Log($"[Camera] Mouse look: {(mouseLookEnabled ? "ON" : "OFF")}");
         }
     }
     

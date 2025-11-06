@@ -25,6 +25,10 @@ public class MeshSpawner : MonoBehaviour
     [Header("Spawn Settings")]
     public Vector3 spawnPosition = Vector3.zero;
     
+    [Header("Auto-Spawn on Start")]
+    [Tooltip("Automatically spawn a cube when the scene starts")]
+    public bool spawnCubeOnStart = false;
+    
     private List<EditableMesh> spawnedMeshes = new List<EditableMesh>();
     private int spawnCounter = 0;
     
@@ -39,6 +43,12 @@ public class MeshSpawner : MonoBehaviour
         
         if (wireframeMaterial == null)
             wireframeMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+        
+        // Auto-spawn cube if enabled
+        if (spawnCubeOnStart)
+        {
+            SpawnPrimitive(PrimitiveType.Cube);
+        }
     }
     
     /// <summary>
@@ -52,8 +62,6 @@ public class MeshSpawner : MonoBehaviour
             Debug.LogError($"[MeshSpawner] Failed to get mesh for primitive: {primitiveType}");
             return null;
         }
-        
-        Debug.Log($"[MeshSpawner] Got mesh for {primitiveType}: {mesh.name}, vertices: {mesh.vertexCount}, readable: {mesh.isReadable}");
         
         return SpawnMesh(mesh, primitiveType.ToString());
     }
@@ -91,7 +99,6 @@ public class MeshSpawner : MonoBehaviour
         EditableMesh editableMesh = newObj.GetComponent<EditableMesh>();
         if (editableMesh != null)
         {
-            Debug.Log($"[MeshSpawner] Assigning mesh to EditableMesh: {mesh.name}, readable: {mesh.isReadable}");
             editableMesh.sourceMesh = mesh;
             editableMesh.meshMaterial = defaultMaterial;
             editableMesh.vertexMaterial = vertexMaterial;
@@ -164,8 +171,6 @@ public class MeshSpawner : MonoBehaviour
         #else
         Destroy(temp);
         #endif
-        
-        Debug.Log($"[MeshSpawner] Created readable {primitiveType} mesh: {readableMesh.vertexCount} vertices, readable: {readableMesh.isReadable}");
         
         return readableMesh;
     }

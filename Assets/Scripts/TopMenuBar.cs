@@ -14,6 +14,7 @@ public class TopMenuBar : MonoBehaviour
     
     [Header("Menu Style")]
     public float menuHeight = 30f;
+    public float menuWidth = 220f; // Compact width for left corner
     public Color menuBarColor = new Color(0.25f, 0.25f, 0.25f, 0.95f);
     public Color buttonColor = new Color(0.3f, 0.3f, 0.3f, 1f);
     public Color buttonHoverColor = new Color(0.4f, 0.4f, 0.4f, 1f);
@@ -101,8 +102,8 @@ public class TopMenuBar : MonoBehaviour
     
     void DrawMenuBar()
     {
-        // Draw menu bar background
-        GUI.Box(new Rect(0, 0, Screen.width, menuHeight), "", menuBarStyle);
+        // Draw menu bar background - only in left corner
+        GUI.Box(new Rect(0, 0, menuWidth, menuHeight), "", menuBarStyle);
         
         float xPos = 10f;
         float buttonWidth = 100f;

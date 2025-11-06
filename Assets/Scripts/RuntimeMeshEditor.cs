@@ -257,14 +257,12 @@ public class RuntimeMeshEditor : MonoBehaviour
         {
             // Don't touch cursor state - let DesktopCameraController handle it
             // User can toggle mouse look with Alt to use crosshair for vertex selection
-            Debug.Log("[RuntimeMeshEditor] Edit mode: Vertex editing enabled, Z/X/C for transform");
         }
         else
         {
             // Exiting Edit mode - clear vertex selection but keep M/R/S modes available
             Deselect();
             isDraggingTransform = false;
-            Debug.Log("[RuntimeMeshEditor] Object mode: Z/X/C available for whole-mesh transform");
         }
     }
     
@@ -316,14 +314,7 @@ public class RuntimeMeshEditor : MonoBehaviour
             Deselect(); // Clear vertex selection when switching modes
             isDraggingTransform = false;
             
-            string modeName = currentTransformMode switch
-            {
-                TransformMode.Translate => "TRANSLATE",
-                TransformMode.Rotate => "ROTATE",
-                TransformMode.Scale => "SCALE",
-                _ => "VERTICES"
-            };
-            Debug.Log($"[RuntimeMeshEditor] Switched to {modeName} mode");
+            // Mode switched successfully
         }
     }
     
@@ -817,7 +808,10 @@ public class RuntimeMeshEditor : MonoBehaviour
         modeStyle.fontStyle = FontStyle.Bold;
         modeStyle.alignment = TextAnchor.MiddleCenter;
         
-        GUI.Box(new Rect(10, 10, 250, 30), $"Mode: {modeText}", modeStyle);
+        // Offset UI to avoid menu bar (menuHeight = 30, add 10px spacing = 40)
+        float uiOffsetY = 40f;
+        
+        GUI.Box(new Rect(10, uiOffsetY, 250, 30), $"Mode: {modeText}", modeStyle);
         
         // Show current control mode
         bool isUsingCrosshair = autoDetectCrosshairMode ? 
@@ -825,11 +819,11 @@ public class RuntimeMeshEditor : MonoBehaviour
             useCrosshairSelection;
         string selectionMode = isUsingCrosshair ? "Crosshair" : "Mouse Cursor";
         string instructions = $"Control: {selectionMode} (Alt to toggle)\nZ=Translate | X=Rotate | C=Scale\nWASD=Move | Q/E=Up/Down | Tab=Exit";
-        GUI.Box(new Rect(10, 50, 350, 80), instructions, boxStyle);
+        GUI.Box(new Rect(10, uiOffsetY + 40, 350, 80), instructions, boxStyle);
         
         if (currentTransformMode == TransformMode.Vertices && selectedVertexIndex >= 0)
         {
-            GUI.Box(new Rect(10, 120, 150, 30), $"Selected: V{selectedVertexIndex}", boxStyle);
+            GUI.Box(new Rect(10, uiOffsetY + 130, 150, 30), $"Selected: V{selectedVertexIndex}", boxStyle);
         }
         
         if (currentTransformMode != TransformMode.Vertices && isDraggingTransform)
@@ -841,7 +835,7 @@ public class RuntimeMeshEditor : MonoBehaviour
                 TransformMode.Scale => "Scaling...",
                 _ => ""
             };
-            GUI.Box(new Rect(10, 120, 200, 30), dragText, boxStyle);
+            GUI.Box(new Rect(10, uiOffsetY + 130, 200, 30), dragText, boxStyle);
         }
     }
     
