@@ -34,36 +34,70 @@ public class DesktopCameraController : MonoBehaviour
     [Tooltip("Allow vertical movement with Q/E keys")]
     public bool allowVerticalMovement = true;
     
-    [Header("Cursor")]
-    [Tooltip("Lock cursor on start")]
-    public bool lockCursorOnStart = true;
+    [Header("Mouse Look")]
+    [Tooltip("Enable mouse look on start")]
+    public bool mouseLookOnStart = true;
     
-    [Tooltip("Key to toggle cursor lock")]
-    public KeyCode toggleCursorKey = KeyCode.Escape;
+    [Tooltip("Key to toggle mouse look on/off")]
+    public KeyCode toggleMouseLookKey = KeyCode.LeftAlt;
     
     // Private state
     private Vector3 currentVelocity;
     private float pitch = 0f;
-    private bool cursorLocked;
+    private bool mouseLookEnabled;
     
     void Start()
     {
-        if (lockCursorOnStart)
-        {
-            LockCursor(true);
-        }
+        mouseLookEnabled = mouseLookOnStart;
+        UpdateCursorState();
     }
     
     void Update()
     {
-        HandleCursorToggle();
+        HandleMouseLookToggle();
         
-        if (cursorLocked)
+        if (mouseLookEnabled)
         {
             HandleLook();
         }
         
         HandleMovement();
+    }
+    
+    void HandleMouseLookToggle()
+    {
+        bool togglePressed = false;
+        
+        #if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null)
+        {
+            togglePressed = keyboard.leftAltKey.wasPressedThisFrame || keyboard.rightAltKey.wasPressedThisFrame;
+        }
+        #else
+        togglePressed = Input.GetKeyDown(toggleMouseLookKey);
+        #endif
+        
+        if (togglePressed)
+        {
+            mouseLookEnabled = !mouseLookEnabled;
+            UpdateCursorState();
+            Debug.Log($"[Camera] Mouse look: {(mouseLookEnabled ? "ON" : "OFF")}");
+        }
+    }
+    
+    void UpdateCursorState()
+    {
+        if (mouseLookEnabled)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+        else
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
     }
     
     void HandleMovement()
@@ -152,48 +186,6 @@ public class DesktopCameraController : MonoBehaviour
         transform.localEulerAngles = currentRotation;
     }
     
-    void HandleCursorToggle()
-    {
-        bool togglePressed = false;
-        
-        #if ENABLE_INPUT_SYSTEM
-        var keyboard = Keyboard.current;
-        if (keyboard != null)
-        {
-            // Check the specific key based on toggleCursorKey
-            if (toggleCursorKey == KeyCode.Escape)
-                togglePressed = keyboard.escapeKey.wasPressedThisFrame;
-            else if (toggleCursorKey == KeyCode.Tab)
-                togglePressed = keyboard.tabKey.wasPressedThisFrame;
-            else if (toggleCursorKey == KeyCode.BackQuote)
-                togglePressed = keyboard.backquoteKey.wasPressedThisFrame;
-            // Add more key mappings as needed
-        }
-        #else
-        togglePressed = Input.GetKeyDown(toggleCursorKey);
-        #endif
-        
-        if (togglePressed)
-        {
-            LockCursor(!cursorLocked);
-        }
-    }
-    
-    void LockCursor(bool lockState)
-    {
-        cursorLocked = lockState;
-        
-        if (lockState)
-        {
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
-        }
-        else
-        {
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
-        }
-    }
     
     // Public methods for external control
     public void SetPosition(Vector3 position)
@@ -210,9 +202,28 @@ public class DesktopCameraController : MonoBehaviour
         transform.eulerAngles = euler;
     }
     
-    public bool IsCursorLocked()
+    public bool IsMouseLookEnabled()
     {
-        return cursorLocked;
+        return mouseLookEnabled;
+    }
+    
+    void OnGUI()
+    {
+        // Show mouse look status
+        if (!mouseLookEnabled)
+        {
+            GUIStyle style = new GUIStyle(GUI.skin.box);
+            style.normal.textColor = Color.cyan;
+            style.fontSize = 16;
+            style.fontStyle = FontStyle.Bold;
+            style.alignment = TextAnchor.MiddleCenter;
+            
+            string message = "Mouse Look OFF - Press Left Alt to toggle\nWASD still works";
+            Vector2 size = new Vector2(400, 60);
+            Vector2 pos = new Vector2((Screen.width - size.x) / 2, 20);
+            
+            GUI.Box(new Rect(pos.x, pos.y, size.x, size.y), message, style);
+        }
     }
 }
 

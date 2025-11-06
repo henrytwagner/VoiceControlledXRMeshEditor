@@ -36,6 +36,13 @@ public class EditableMesh : MonoBehaviour
     public bool enableHotkey = true;
     public KeyCode toggleModeKey = KeyCode.Tab;
     
+    [Header("Origin Indicator")]
+    public bool showOriginInMeshMode = true;
+    public float originDotSize = 6f; // Pixels
+    public Color originColor = new Color(1f, 0.8f, 0.2f, 0.8f); // Orange/yellow
+    public bool showOriginInGameView = true;
+    public bool showOriginInSceneView = true;
+    
     // Internal
     const string MeshChildName = "_EditableMesh";
     const string VertsChildName = "_MeshVertices";
@@ -81,6 +88,40 @@ public class EditableMesh : MonoBehaviour
         if (editableMesh == null && sourceMesh != null)
             RebuildFromSource();
         ApplyModeActiveStates();
+        
+        // Force ensure collider exists
+        EnsureMeshCollider();
+    }
+    
+    void EnsureMeshCollider()
+    {
+        if (meshFilter != null)
+        {
+            var meshCollider = meshFilter.GetComponent<MeshCollider>();
+            if (meshCollider == null)
+            {
+                meshCollider = meshFilter.gameObject.AddComponent<MeshCollider>();
+                meshCollider.convex = false;
+                if (editableMesh != null)
+                {
+                    meshCollider.sharedMesh = editableMesh;
+                    Debug.Log($"[EditableMesh] Added MeshCollider - Mesh: {editableMesh.name}, Vertices: {editableMesh.vertexCount}");
+                }
+                else
+                {
+                    Debug.LogWarning("[EditableMesh] MeshCollider added but no mesh to assign yet!");
+                }
+            }
+            else
+            {
+                // Collider exists, make sure it has the mesh
+                if (meshCollider.sharedMesh == null && editableMesh != null)
+                {
+                    meshCollider.sharedMesh = editableMesh;
+                    Debug.Log($"[EditableMesh] Updated existing MeshCollider with mesh: {editableMesh.name}");
+                }
+            }
+        }
     }
     
     void OnValidate()
@@ -148,6 +189,9 @@ public class EditableMesh : MonoBehaviour
                 meshRenderer = holder.AddComponent<MeshRenderer>();
             }
         }
+        
+        // Ensure MeshCollider exists
+        EnsureMeshCollider();
         
         if (vertsRoot == null)
         {
@@ -260,6 +304,14 @@ public class EditableMesh : MonoBehaviour
         editableMesh.normals = sourceMesh.normals;
         editableMesh.uv = sourceMesh.uv;
         editableMesh.RecalculateBounds();
+        
+        // Update collider mesh for selection
+        var meshCollider = meshFilter.GetComponent<MeshCollider>();
+        if (meshCollider != null)
+        {
+            meshCollider.sharedMesh = null; // Clear first
+            meshCollider.sharedMesh = editableMesh; // Then reassign
+        }
     }
     
     void BuildVertexSpheres()
@@ -337,6 +389,137 @@ public class EditableMesh : MonoBehaviour
         return uniqueVertices != null ? uniqueVertices.Length : 0;
     }
     
+    [ContextMenu("Debug: Check Collider Status")]
+    void DebugColliderStatus()
+    {
+        if (meshFilter == null)
+        {
+            Debug.LogError("MeshFilter is NULL!");
+            return;
+        }
+        
+        var meshCollider = meshFilter.GetComponent<MeshCollider>();
+        if (meshCollider == null)
+        {
+            Debug.LogError("NO MeshCollider found! Will add one now...");
+            EnsureMeshCollider();
+        }
+        else
+        {
+            Debug.Log($"✓ MeshCollider EXISTS on {meshFilter.gameObject.name}");
+            Debug.Log($"  - Mesh assigned: {(meshCollider.sharedMesh != null ? meshCollider.sharedMesh.name : "NULL")}");
+            Debug.Log($"  - Vertex count: {(meshCollider.sharedMesh != null ? meshCollider.sharedMesh.vertexCount : 0)}");
+            Debug.Log($"  - Convex: {meshCollider.convex}");
+            Debug.Log($"  - Enabled: {meshCollider.enabled}");
+            Debug.Log($"  - GameObject: {meshCollider.gameObject.name}");
+            Debug.Log($"  - Full path: {GetFullPath(meshCollider.transform)}");
+            Debug.Log($"  - Layer: {LayerMask.LayerToName(meshCollider.gameObject.layer)}");
+            Debug.Log($"  - World Position: {meshCollider.transform.position}");
+            Debug.Log($"  - Bounds: {meshCollider.bounds}");
+        }
+    }
+    
+    string GetFullPath(Transform t)
+    {
+        string path = t.name;
+        while (t.parent != null)
+        {
+            t = t.parent;
+            path = t.name + "/" + path;
+        }
+        return path;
+    }
+    
+    // Draw origin indicator
+    void OnDrawGizmos()
+    {
+        if (showOriginInMeshMode && showOriginInSceneView && mode == DisplayMode.Mesh)
+        {
+            DrawOriginGizmoScene();
+        }
+    }
+    
+    void OnGUI()
+    {
+        if (showOriginInMeshMode && showOriginInGameView && mode == DisplayMode.Mesh)
+        {
+            DrawOriginDot();
+        }
+    }
+    
+    void DrawOriginDot()
+    {
+        // Find active camera
+        Camera cam = Camera.main;
+        if (cam == null)
+        {
+            Camera[] cameras = FindObjectsOfType<Camera>();
+            foreach (Camera c in cameras)
+            {
+                if (c.enabled && c.gameObject.activeInHierarchy)
+                {
+                    cam = c;
+                    break;
+                }
+            }
+        }
+        
+        if (cam == null)
+            return;
+        
+        // Convert origin to screen position
+        Vector3 worldOrigin = transform.position;
+        Vector3 screenPos = cam.WorldToScreenPoint(worldOrigin);
+        
+        // Only draw if in front of camera (z > 0)
+        if (screenPos.z < 0)
+            return;
+        
+        // GUI coordinates: (0,0) is top-left, Y increases downward
+        // WorldToScreenPoint: (0,0) is bottom-left, Y increases upward
+        // So we flip Y
+        Vector2 guiPos = new Vector2(screenPos.x, Screen.height - screenPos.y);
+        
+        // Draw circle/dot - always visible
+        Texture2D dot = Texture2D.whiteTexture;
+        float halfSize = originDotSize / 2f;
+        
+        // Draw multiple circles for a nice visible dot
+        // Outer glow
+        GUI.color = new Color(originColor.r, originColor.g, originColor.b, 0.2f);
+        GUI.DrawTexture(new Rect(guiPos.x - halfSize - 3, guiPos.y - halfSize - 3, 
+                                originDotSize + 6, originDotSize + 6), dot);
+        
+        // Middle ring (darker border)
+        GUI.color = new Color(0f, 0f, 0f, 0.6f);
+        GUI.DrawTexture(new Rect(guiPos.x - halfSize - 1, guiPos.y - halfSize - 1, 
+                                originDotSize + 2, originDotSize + 2), dot);
+        
+        // Inner circle (colored)
+        GUI.color = originColor;
+        GUI.DrawTexture(new Rect(guiPos.x - halfSize, guiPos.y - halfSize, 
+                                originDotSize, originDotSize), dot);
+        
+        // Center highlight
+        GUI.color = Color.white;
+        GUI.DrawTexture(new Rect(guiPos.x - 1, guiPos.y - 1, 2, 2), dot);
+        
+        GUI.color = Color.white;
+    }
+    
+    void DrawOriginGizmoScene()
+    {
+        Vector3 origin = transform.position;
+        float size = 0.05f;
+        
+        // Simple cross hair in Scene view
+        Gizmos.color = originColor;
+        Gizmos.DrawLine(origin - transform.right * size, origin + transform.right * size);
+        Gizmos.DrawLine(origin - transform.up * size, origin + transform.up * size);
+        Gizmos.DrawLine(origin - transform.forward * size, origin + transform.forward * size);
+        Gizmos.DrawSphere(origin, size * 0.3f);
+    }
+    
     public void SetVertex(int index, Vector3 localPos)
     {
         if (uniqueVertices == null || index < 0 || index >= uniqueVertices.Length)
@@ -356,6 +539,14 @@ public class EditableMesh : MonoBehaviour
             editableMesh.vertices = verts;
             editableMesh.RecalculateNormals();
             editableMesh.RecalculateBounds();
+            
+            // Update collider mesh for selection
+            var meshCollider = meshFilter.GetComponent<MeshCollider>();
+            if (meshCollider != null)
+            {
+                meshCollider.sharedMesh = null; // Clear first
+                meshCollider.sharedMesh = editableMesh; // Then reassign
+            }
         }
         
         // Update sphere position
