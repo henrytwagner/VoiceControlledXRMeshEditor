@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.XR;
+using UnityEngine.XR.Management;
 
 /// <summary>
 /// Automatically detects if XR is active and enables desktop fallbacks if not.
@@ -28,13 +29,23 @@ public class XRAutoSetup : MonoBehaviour
 
     void DetectAndConfigure()
     {
-        // Check if XR device is active
-        bool xrActive = XRSettings.isDeviceActive;
+        // Check if XR device or loader is active (covers simulators)
+        bool xrDeviceActive = XRSettings.isDeviceActive;
+        bool xrLoaderActive = false;
+
+        XRGeneralSettings generalSettings = XRGeneralSettings.Instance;
+        if (generalSettings != null && generalSettings.Manager != null)
+        {
+            xrLoaderActive = generalSettings.Manager.activeLoader != null;
+        }
+
+        bool xrActive = xrDeviceActive || xrLoaderActive;
         
         if (showDebugInfo)
         {
             Debug.Log($"[XRAutoSetup] XR Device Active: {xrActive}");
             Debug.Log($"[XRAutoSetup] XR Device Name: {XRSettings.loadedDeviceName}");
+            Debug.Log($"[XRAutoSetup] XR Loader Active: {xrLoaderActive}");
             Debug.Log($"[XRAutoSetup] XR Supported: {XRSettings.supportedDevices.Length > 0}");
         }
 
