@@ -15,6 +15,7 @@ public class VoiceCommandProcessor : MonoBehaviour
     public TransformPanel transformPanel; // For UI control
     public OrientationGizmo orientationGizmo; // For gizmo control
     public DesktopCameraController cameraController; // For camera control
+    public RuntimeMeshEditor runtimeMeshEditor; // For label control
     
     [Header("Settings")]
     public bool logCommands = true;
@@ -54,6 +55,9 @@ public class VoiceCommandProcessor : MonoBehaviour
         
         if (cameraController == null)
             cameraController = FindAnyObjectByType<DesktopCameraController>();
+        
+        if (runtimeMeshEditor == null)
+            runtimeMeshEditor = FindAnyObjectByType<RuntimeMeshEditor>();
         
         Debug.Log($"[VoiceCommandProcessor] Initialized - useSelectedObject: {useSelectedObject}");
         if (objectSelector != null)
@@ -172,6 +176,9 @@ public class VoiceCommandProcessor : MonoBehaviour
                 break;
             case "toggle_mouse_look":
                 result = ToggleMouseLook(command);
+                break;
+            case "toggle_labels":
+                result = ToggleLabels(command);
                 break;
             case "clear_all":
                 result = ClearAll();
@@ -732,6 +739,26 @@ public class VoiceCommandProcessor : MonoBehaviour
         
         bool currentState = cameraController.IsMouseLookEnabled();
         return new CommandResult(true, $"Mouse look {(currentState ? "ON" : "OFF")}");
+    }
+    
+    /// <summary>
+    /// Toggle labels (vertex and object labels)
+    /// JSON: {"command":"toggle_labels"} or {"command":"toggle_labels", "enable":true}
+    /// </summary>
+    CommandResult ToggleLabels(MeshCommand cmd)
+    {
+        if (runtimeMeshEditor == null)
+            runtimeMeshEditor = FindAnyObjectByType<RuntimeMeshEditor>();
+        if (runtimeMeshEditor == null)
+            return new CommandResult(false, "No RuntimeMeshEditor found");
+        
+        bool enable;
+        if (TryParseState(cmd.state, out enable))
+            runtimeMeshEditor.SetLabels(enable);
+        else
+            runtimeMeshEditor.ToggleLabels();
+        
+        return new CommandResult(true, $"Labels: {(runtimeMeshEditor.showLabels ? "ON" : "OFF")}");
     }
     
     /// <summary>

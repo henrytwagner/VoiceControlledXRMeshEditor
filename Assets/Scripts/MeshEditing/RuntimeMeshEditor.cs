@@ -53,6 +53,10 @@ public class RuntimeMeshEditor : MonoBehaviour
     public Color edgeColor = Color.cyan;
     public float edgeLineWidth = 0.002f;
     public bool showInGameView = true; // Show edges in Game view, not just Scene view
+    public bool showObjectLabels = true; // Show object name labels
+    public Color objectLabelColor = Color.white;
+    [Tooltip("Key to toggle labels on/off")]
+    public KeyCode toggleLabelsKey = KeyCode.L;
     
     // State
     private enum TransformMode { Vertices, Translate, Rotate, Scale }
@@ -77,6 +81,9 @@ public class RuntimeMeshEditor : MonoBehaviour
     
     // 3D vertex labels
     private Dictionary<int, GameObject> vertexLabelObjects = new Dictionary<int, GameObject>();
+    
+    // 3D object labels
+    private Dictionary<EditableMesh, GameObject> objectLabelObjects = new Dictionary<EditableMesh, GameObject>();
     
     void Awake()
     {
@@ -257,8 +264,27 @@ public class RuntimeMeshEditor : MonoBehaviour
             CleanupVertexLabels();
         }
         
+        // Update object labels (works in both modes)
+        if (showObjectLabels)
+        {
+            UpdateObjectLabels(isXR);
+        }
+        else
+        {
+            CleanupObjectLabels();
+        }
+        
+        // Update billboard rotation for all labels every frame in XR mode
+        if (isXR && (showLabels || showObjectLabels))
+        {
+            UpdateAllLabelBillboards();
+        }
+        
         // Handle transform mode toggle (available in both Object and Edit modes)
         HandleTransformModeToggle();
+        
+        // Handle label toggle
+        HandleLabelToggle();
         
         // Handle different transform modes
         switch (currentTransformMode)
@@ -351,6 +377,47 @@ public class RuntimeMeshEditor : MonoBehaviour
             
             // Mode switched successfully
         }
+    }
+    
+    void HandleLabelToggle()
+    {
+        bool labelKeyPressed = false;
+        
+        #if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null)
+        {
+            labelKeyPressed = keyboard.lKey.wasPressedThisFrame;
+        }
+        #else
+        labelKeyPressed = Input.GetKeyDown(toggleLabelsKey);
+        #endif
+        
+        if (labelKeyPressed)
+        {
+            ToggleLabels();
+        }
+    }
+    
+    public void ToggleLabels()
+    {
+        showLabels = !showLabels;
+        showObjectLabels = !showObjectLabels;
+        if (!showLabels)
+            CleanupVertexLabels();
+        if (!showObjectLabels)
+            CleanupObjectLabels();
+        Debug.Log($"[RuntimeMeshEditor] Labels: {(showLabels ? "ON" : "OFF")}");
+    }
+    
+    public void SetLabels(bool enabled)
+    {
+        showLabels = enabled;
+        showObjectLabels = enabled;
+        if (!showLabels)
+            CleanupVertexLabels();
+        if (!showObjectLabels)
+            CleanupObjectLabels();
     }
     
     void HandleMeshTranslation()
@@ -791,24 +858,30 @@ public class RuntimeMeshEditor : MonoBehaviour
     
     void OnGUI()
     {
-        if (targetMesh == null || editCamera == null)
+        if (editCamera == null)
             return;
         
-        bool inEditMode = (targetMesh.mode == EditableMesh.DisplayMode.Edit);
+        bool inEditMode = targetMesh != null && (targetMesh.mode == EditableMesh.DisplayMode.Edit);
         
-        if (!inEditMode)
-            return;
-        
-        // In desktop mode, draw vertex labels using OnGUI (screen space)
+        // In desktop mode, draw vertex labels using OnGUI (screen space) - only in edit mode
         // In XR mode, labels are 3D TextMesh (handled by UpdateVertexLabels3D)
         bool isXR = XRSettings.isDeviceActive;
-        if (!isXR && showLabels)
+        if (!isXR && showLabels && inEditMode && targetMesh != null)
         {
             DrawVertexLabelsGUI();
         }
         
-        // Draw UI instructions
-        DrawUIInstructions();
+        // In desktop mode, draw object labels using OnGUI - always show if enabled
+        if (!isXR && showObjectLabels)
+        {
+            DrawObjectLabelsGUI();
+        }
+        
+        // Draw UI instructions - only in edit mode
+        if (inEditMode && targetMesh != null)
+        {
+            DrawUIInstructions();
+        }
     }
     
     void DrawVertexLabelsGUI()
@@ -834,6 +907,49 @@ public class RuntimeMeshEditor : MonoBehaviour
                 
                 labelStyle.normal.textColor = (i == selectedVertexIndex) ? selectedColor : normalColor;
                 GUI.Label(labelRect, $"V{i}", labelStyle);
+            }
+        }
+    }
+    
+    void DrawObjectLabelsGUI()
+    {
+        // Draw object name labels in screen space (desktop mode only)
+        EditableMesh[] allMeshes = FindObjectsByType<EditableMesh>(FindObjectsSortMode.None);
+        Transform selectedTransform = objectSelector != null ? objectSelector.GetCurrentSelection() : null;
+        
+        GUIStyle labelStyle = new GUIStyle(GUI.skin.label);
+        labelStyle.fontSize = 14;
+        labelStyle.fontStyle = FontStyle.Bold;
+        labelStyle.alignment = TextAnchor.MiddleCenter;
+        
+        foreach (EditableMesh mesh in allMeshes)
+        {
+            if (mesh == null || !mesh.gameObject.activeInHierarchy)
+                continue;
+            
+            // Skip labels while the object is in Edit mode
+            if (mesh.mode == EditableMesh.DisplayMode.Edit)
+                continue;
+            
+            bool isSelected = selectedTransform != null &&
+                (selectedTransform == mesh.transform || selectedTransform.IsChildOf(mesh.transform));
+            Color labelColor = isSelected ? mesh.originColorSelected : objectLabelColor;
+            labelStyle.normal.textColor = labelColor;
+            
+            // Position label at object's origin
+            Vector3 worldPos = mesh.transform.position;
+            Vector3 screenPos = editCamera.WorldToScreenPoint(worldPos);
+            
+            if (screenPos.z > 0)
+            {
+                Vector2 guiPos = new Vector2(screenPos.x, Screen.height - screenPos.y);
+                string objectName = mesh.gameObject.name;
+                
+                // Calculate label size based on text
+                Vector2 labelSize = labelStyle.CalcSize(new GUIContent(objectName));
+                Rect labelRect = new Rect(guiPos.x - labelSize.x / 2, guiPos.y - labelSize.y / 2, labelSize.x, labelSize.y);
+                
+                GUI.Label(labelRect, objectName, labelStyle);
             }
         }
     }
@@ -1124,6 +1240,10 @@ public class RuntimeMeshEditor : MonoBehaviour
             if (existingLabelObj != null)
             {
                 existingLabelObj.transform.position = meshTransform.TransformPoint(vertices[i]);
+                
+                // Make label face camera (billboard effect)
+                UpdateLabelBillboard(existingLabelObj.transform);
+                
                 TextMesh textMesh = existingLabelObj.GetComponent<TextMesh>();
                 if (textMesh != null)
                 {
@@ -1203,6 +1323,7 @@ public class RuntimeMeshEditor : MonoBehaviour
             DestroyImmediate(edgeMaterial);
         CleanupWireframe();
         CleanupVertexLabels();
+        CleanupObjectLabels();
     }
     
     void CleanupWireframe()
@@ -1231,6 +1352,211 @@ public class RuntimeMeshEditor : MonoBehaviour
             }
         }
         vertexLabelObjects.Clear();
+    }
+    
+    void CleanupObjectLabels()
+    {
+        foreach (var labelObj in objectLabelObjects.Values)
+        {
+            if (labelObj != null)
+            {
+                if (Application.isPlaying)
+                    Destroy(labelObj);
+                else
+                    DestroyImmediate(labelObj);
+            }
+        }
+        objectLabelObjects.Clear();
+    }
+
+    void RemoveObjectLabel(EditableMesh mesh)
+    {
+        if (mesh == null)
+            return;
+
+        if (objectLabelObjects.TryGetValue(mesh, out GameObject labelObj))
+        {
+            if (labelObj != null)
+            {
+                if (Application.isPlaying)
+                    Destroy(labelObj);
+                else
+                    DestroyImmediate(labelObj);
+            }
+            objectLabelObjects.Remove(mesh);
+        }
+    }
+
+    void UpdateLabelBillboard(Transform labelTransform)
+    {
+        // Make label always face the camera (billboard effect)
+        Camera cam = GetActiveCamera();
+        
+        if (cam != null && labelTransform != null)
+        {
+            // Make label face camera
+            Vector3 directionToCamera = cam.transform.position - labelTransform.position;
+            if (directionToCamera != Vector3.zero)
+            {
+                labelTransform.rotation = Quaternion.LookRotation(-directionToCamera);
+            }
+        }
+    }
+    
+    void UpdateAllLabelBillboards()
+    {
+        // Update billboard rotation for all vertex and object labels
+        Camera cam = GetActiveCamera();
+        if (cam == null)
+            return;
+        
+        // Update vertex labels
+        foreach (var labelObj in vertexLabelObjects.Values)
+        {
+            if (labelObj != null)
+            {
+                Vector3 directionToCamera = cam.transform.position - labelObj.transform.position;
+                if (directionToCamera != Vector3.zero)
+                {
+                    labelObj.transform.rotation = Quaternion.LookRotation(-directionToCamera);
+                }
+            }
+        }
+        
+        // Update object labels
+        foreach (var labelObj in objectLabelObjects.Values)
+        {
+            if (labelObj != null)
+            {
+                Vector3 directionToCamera = cam.transform.position - labelObj.transform.position;
+                if (directionToCamera != Vector3.zero)
+                {
+                    labelObj.transform.rotation = Quaternion.LookRotation(-directionToCamera);
+                }
+            }
+        }
+    }
+    
+    Camera GetActiveCamera()
+    {
+        bool isXR = XRSettings.isDeviceActive;
+        
+        if (isXR)
+        {
+            // In XR, use the main camera or find the active XR camera
+            Camera cam = Camera.main;
+            if (cam == null)
+            {
+                Camera[] cameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
+                foreach (Camera c in cameras)
+                {
+                    if (c.enabled && c.gameObject.activeInHierarchy)
+                    {
+                        cam = c;
+                        break;
+                    }
+                }
+            }
+            return cam;
+        }
+        else
+        {
+            // Desktop mode: use editCamera
+            if (editCamera != null)
+                return editCamera;
+            return Camera.main;
+        }
+    }
+    
+    void UpdateObjectLabels(bool isXR)
+    {
+        if (!showObjectLabels)
+        {
+            CleanupObjectLabels();
+            return;
+        }
+        
+        EditableMesh[] allMeshes = FindObjectsByType<EditableMesh>(FindObjectsSortMode.None);
+        HashSet<EditableMesh> currentMeshes = new HashSet<EditableMesh>(allMeshes);
+        Transform selectedTransform = objectSelector != null ? objectSelector.GetCurrentSelection() : null;
+        
+        if (isXR)
+        {
+            // XR mode: Use 3D TextMesh labels
+            foreach (EditableMesh mesh in allMeshes)
+            {
+                if (mesh == null || !mesh.gameObject.activeInHierarchy)
+                    continue;
+                
+                bool isInEditMode = mesh.mode == EditableMesh.DisplayMode.Edit;
+                if (isInEditMode)
+                {
+                    RemoveObjectLabel(mesh);
+                    continue;
+                }
+                
+                bool isSelected = selectedTransform != null &&
+                    (selectedTransform == mesh.transform || selectedTransform.IsChildOf(mesh.transform));
+                Color labelColor = isSelected ? mesh.originColorSelected : objectLabelColor;
+                
+                if (!objectLabelObjects.ContainsKey(mesh))
+                {
+                    // Create new label
+                    GameObject labelObj = new GameObject($"ObjectLabel_{mesh.gameObject.name}");
+                    labelObj.transform.SetParent(mesh.transform, false);
+                    
+                    // Add TextMesh component
+                    TextMesh textMesh = labelObj.AddComponent<TextMesh>();
+                    textMesh.text = mesh.gameObject.name;
+                    textMesh.fontSize = 30;
+                    textMesh.characterSize = 0.15f;
+                    textMesh.anchor = TextAnchor.MiddleCenter;
+                    textMesh.alignment = TextAlignment.Center;
+                    textMesh.color = labelColor;
+                    
+                    // Position above object (at origin + offset upward)
+                    labelObj.transform.localPosition = Vector3.up * 0.5f;
+                    
+                    objectLabelObjects[mesh] = labelObj;
+                }
+                else
+                {
+                    // Update existing label
+                    GameObject labelObj = objectLabelObjects[mesh];
+                    if (labelObj != null)
+                    {
+                        TextMesh textMesh = labelObj.GetComponent<TextMesh>();
+                        if (textMesh != null)
+                        {
+                            textMesh.text = mesh.gameObject.name;
+                            textMesh.color = labelColor;
+                        }
+                        // Update position
+                        labelObj.transform.localPosition = Vector3.up * 0.5f;
+                        
+                        // Make label face camera (billboard effect)
+                        UpdateLabelBillboard(labelObj.transform);
+                    }
+                }
+            }
+        }
+        else
+        {
+            // Desktop mode: Labels are drawn in OnGUI, just clean up 3D labels
+            CleanupObjectLabels();
+        }
+        
+        // Remove labels for objects that no longer exist
+        List<EditableMesh> toRemove = new List<EditableMesh>();
+        foreach (var kvp in objectLabelObjects)
+        {
+            if (!currentMeshes.Contains(kvp.Key) || kvp.Key == null)
+                toRemove.Add(kvp.Key);
+        }
+        foreach (EditableMesh mesh in toRemove)
+        {
+            RemoveObjectLabel(mesh);
+        }
     }
 }
 
