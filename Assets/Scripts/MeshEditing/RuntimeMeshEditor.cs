@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine.XR;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -50,6 +51,7 @@ public class RuntimeMeshEditor : MonoBehaviour
     [Header("Visual Aids")]
     public bool showEdges = true;
     public Color edgeColor = Color.cyan;
+    public float edgeLineWidth = 0.002f;
     public bool showInGameView = true; // Show edges in Game view, not just Scene view
     
     // State
@@ -67,6 +69,14 @@ public class RuntimeMeshEditor : MonoBehaviour
     private Vector3 transformStartScale;
     private Vector2 transformStartMousePos;
     private bool wasInMouseLookMode = false; // Track if we were in mouse look before transform
+    
+    // 3D wireframe rendering
+    private GameObject wireframeRoot;
+    private List<LineRenderer> edgeLineRenderers = new List<LineRenderer>();
+    private Material edgeMaterial;
+    
+    // 3D vertex labels
+    private Dictionary<int, GameObject> vertexLabelObjects = new Dictionary<int, GameObject>();
     
     void Awake()
     {
@@ -222,6 +232,29 @@ public class RuntimeMeshEditor : MonoBehaviour
         {
             OnModeChanged(targetMesh.mode);
             lastMode = targetMesh.mode;
+        }
+        
+        // Update wireframe and labels based on XR mode
+        bool isXR = XRSettings.isDeviceActive;
+        if (targetMesh.mode == EditableMesh.DisplayMode.Edit)
+        {
+            if (isXR)
+            {
+                // XR mode: Use 3D LineRenderers and TextMesh
+                UpdateWireframe3D();
+                UpdateVertexLabels3D();
+            }
+            else
+            {
+                // Desktop mode: Use GL rendering (handled in OnRenderObject) and OnGUI labels
+                CleanupWireframe();
+                CleanupVertexLabels();
+            }
+        }
+        else
+        {
+            CleanupWireframe();
+            CleanupVertexLabels();
         }
         
         // Handle transform mode toggle (available in both Object and Edit modes)
@@ -758,7 +791,7 @@ public class RuntimeMeshEditor : MonoBehaviour
     
     void OnGUI()
     {
-        if (targetMesh == null || editCamera == null || !showLabels)
+        if (targetMesh == null || editCamera == null)
             return;
         
         bool inEditMode = (targetMesh.mode == EditableMesh.DisplayMode.Edit);
@@ -766,7 +799,21 @@ public class RuntimeMeshEditor : MonoBehaviour
         if (!inEditMode)
             return;
         
-        // Draw vertex labels
+        // In desktop mode, draw vertex labels using OnGUI (screen space)
+        // In XR mode, labels are 3D TextMesh (handled by UpdateVertexLabels3D)
+        bool isXR = XRSettings.isDeviceActive;
+        if (!isXR && showLabels)
+        {
+            DrawVertexLabelsGUI();
+        }
+        
+        // Draw UI instructions
+        DrawUIInstructions();
+    }
+    
+    void DrawVertexLabelsGUI()
+    {
+        // Draw vertex labels in screen space (desktop mode only)
         Vector3[] vertices = targetMesh.GetVertices();
         Transform meshTransform = targetMesh.transform;
         
@@ -789,7 +836,10 @@ public class RuntimeMeshEditor : MonoBehaviour
                 GUI.Label(labelRect, $"V{i}", labelStyle);
             }
         }
-        
+    }
+    
+    void DrawUIInstructions()
+    {
         // Instructions
         GUIStyle boxStyle = new GUIStyle(GUI.skin.box);
         boxStyle.normal.textColor = Color.white;
@@ -855,6 +905,10 @@ public class RuntimeMeshEditor : MonoBehaviour
     
     void OnRenderObject()
     {
+        // Only use GL rendering in desktop mode (not XR)
+        if (XRSettings.isDeviceActive)
+            return;
+            
         if (!showEdges || !showInGameView || targetMesh == null)
             return;
         
@@ -862,36 +916,15 @@ public class RuntimeMeshEditor : MonoBehaviour
         if (!inEditMode || !Application.isPlaying)
             return;
         
-        // Use GL to draw lines in Game view
+        // Use GL to draw lines in Game view (desktop mode only)
+        // Original working code - no camera parameter needed
         DrawMeshEdgesGL();
-    }
-    
-    void DrawMeshEdges()
-    {
-        // For Scene view (Gizmos)
-        var edges = GetMeshEdges();
-        if (edges == null)
-            return;
-        
-        Transform meshTransform = targetMesh.transform;
-        MeshFilter mf = meshTransform.GetComponentInChildren<MeshFilter>();
-        if (mf == null || mf.sharedMesh == null)
-            return;
-        
-        Vector3[] meshVerts = mf.sharedMesh.vertices;
-        
-        Gizmos.color = edgeColor;
-        foreach (var edge in edges)
-        {
-            Vector3 start = meshTransform.TransformPoint(meshVerts[edge.Item1]);
-            Vector3 end = meshTransform.TransformPoint(meshVerts[edge.Item2]);
-            Gizmos.DrawLine(start, end);
-        }
     }
     
     void DrawMeshEdgesGL()
     {
-        // For Game view (GL rendering)
+        // For Game view (GL rendering) - desktop mode only
+        // Original working code restored
         var edges = GetMeshEdges();
         if (edges == null)
             return;
@@ -930,6 +963,194 @@ public class RuntimeMeshEditor : MonoBehaviour
         
         GL.End();
         GL.PopMatrix();
+    }
+    
+    void DrawMeshEdges()
+    {
+        // For Scene view (Gizmos)
+        var edges = GetMeshEdges();
+        if (edges == null)
+            return;
+        
+        Transform meshTransform = targetMesh.transform;
+        MeshFilter mf = meshTransform.GetComponentInChildren<MeshFilter>();
+        if (mf == null || mf.sharedMesh == null)
+            return;
+        
+        Vector3[] meshVerts = mf.sharedMesh.vertices;
+        
+        Gizmos.color = edgeColor;
+        foreach (var edge in edges)
+        {
+            Vector3 start = meshTransform.TransformPoint(meshVerts[edge.Item1]);
+            Vector3 end = meshTransform.TransformPoint(meshVerts[edge.Item2]);
+            Gizmos.DrawLine(start, end);
+        }
+    }
+    
+    void UpdateWireframe3D()
+    {
+        if (!showEdges || !showInGameView || targetMesh == null)
+        {
+            CleanupWireframe();
+            return;
+        }
+        
+        var edges = GetMeshEdges();
+        if (edges == null)
+        {
+            CleanupWireframe();
+            return;
+        }
+        
+        Transform meshTransform = targetMesh.transform;
+        MeshFilter mf = meshTransform.GetComponentInChildren<MeshFilter>();
+        if (mf == null || mf.sharedMesh == null)
+        {
+            CleanupWireframe();
+            return;
+        }
+        
+        Vector3[] meshVerts = mf.sharedMesh.vertices;
+        
+        // Create wireframe root if needed
+        if (wireframeRoot == null)
+        {
+            wireframeRoot = new GameObject("_WireframeEdges");
+            wireframeRoot.transform.SetParent(meshTransform, false);
+        }
+        
+        // Create edge material if needed
+        if (edgeMaterial == null)
+        {
+            edgeMaterial = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+            edgeMaterial.color = edgeColor;
+            edgeMaterial.hideFlags = HideFlags.HideAndDontSave;
+        }
+        edgeMaterial.color = edgeColor;
+        
+        // Ensure we have enough LineRenderers
+        int edgeCount = edges.Count;
+        while (edgeLineRenderers.Count < edgeCount)
+        {
+            GameObject lineObj = new GameObject($"Edge_{edgeLineRenderers.Count}");
+            lineObj.transform.SetParent(wireframeRoot.transform, false);
+            LineRenderer lr = lineObj.AddComponent<LineRenderer>();
+            lr.material = edgeMaterial;
+            lr.startWidth = edgeLineWidth;
+            lr.endWidth = edgeLineWidth;
+            lr.useWorldSpace = true;
+            lr.positionCount = 2;
+            lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            edgeLineRenderers.Add(lr);
+        }
+        
+        // Remove excess LineRenderers
+        while (edgeLineRenderers.Count > edgeCount)
+        {
+            LineRenderer lr = edgeLineRenderers[edgeLineRenderers.Count - 1];
+            edgeLineRenderers.RemoveAt(edgeLineRenderers.Count - 1);
+            if (lr != null)
+            {
+                if (Application.isPlaying)
+                    Destroy(lr.gameObject);
+                else
+                    DestroyImmediate(lr.gameObject);
+            }
+        }
+        
+        // Update line positions
+        int lineIndex = 0;
+        foreach (var edge in edges)
+        {
+            if (lineIndex >= edgeLineRenderers.Count)
+                break;
+                
+            LineRenderer lr = edgeLineRenderers[lineIndex];
+            if (lr != null)
+            {
+                Vector3 start = meshTransform.TransformPoint(meshVerts[edge.Item1]);
+                Vector3 end = meshTransform.TransformPoint(meshVerts[edge.Item2]);
+                lr.SetPosition(0, start);
+                lr.SetPosition(1, end);
+                lr.enabled = true;
+            }
+            lineIndex++;
+        }
+        
+        // Disable unused lines
+        for (int i = lineIndex; i < edgeLineRenderers.Count; i++)
+        {
+            if (edgeLineRenderers[i] != null)
+                edgeLineRenderers[i].enabled = false;
+        }
+    }
+    
+    void UpdateVertexLabels3D()
+    {
+        if (!showLabels || targetMesh == null)
+        {
+            CleanupVertexLabels();
+            return;
+        }
+        
+        Vector3[] vertices = targetMesh.GetVertices();
+        Transform meshTransform = targetMesh.transform;
+        
+        // Create/update label objects
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            if (!vertexLabelObjects.ContainsKey(i))
+            {
+                // Create new label
+                GameObject labelObj = new GameObject($"VertexLabel_{i}");
+                labelObj.transform.SetParent(meshTransform, false);
+                
+                // Add TextMesh component
+                TextMesh textMesh = labelObj.AddComponent<TextMesh>();
+                textMesh.text = $"V{i}";
+                textMesh.fontSize = 20;
+                textMesh.characterSize = 0.1f;
+                textMesh.anchor = TextAnchor.MiddleCenter;
+                textMesh.alignment = TextAlignment.Center;
+                textMesh.color = (i == selectedVertexIndex) ? selectedColor : normalColor;
+                
+                vertexLabelObjects[i] = labelObj;
+            }
+            
+            // Update label position and color
+            GameObject existingLabelObj = vertexLabelObjects[i];
+            if (existingLabelObj != null)
+            {
+                existingLabelObj.transform.position = meshTransform.TransformPoint(vertices[i]);
+                TextMesh textMesh = existingLabelObj.GetComponent<TextMesh>();
+                if (textMesh != null)
+                {
+                    textMesh.color = (i == selectedVertexIndex) ? selectedColor : normalColor;
+                }
+            }
+        }
+        
+        // Remove labels for vertices that no longer exist
+        List<int> toRemove = new List<int>();
+        foreach (var kvp in vertexLabelObjects)
+        {
+            if (kvp.Key >= vertices.Length)
+                toRemove.Add(kvp.Key);
+        }
+        foreach (int key in toRemove)
+        {
+            GameObject obj = vertexLabelObjects[key];
+            if (obj != null)
+            {
+                if (Application.isPlaying)
+                    Destroy(obj);
+                else
+                    DestroyImmediate(obj);
+            }
+            vertexLabelObjects.Remove(key);
+        }
     }
     
     HashSet<(int, int)> GetMeshEdges()
@@ -978,6 +1199,38 @@ public class RuntimeMeshEditor : MonoBehaviour
     {
         if (lineMaterial != null)
             DestroyImmediate(lineMaterial);
+        if (edgeMaterial != null)
+            DestroyImmediate(edgeMaterial);
+        CleanupWireframe();
+        CleanupVertexLabels();
+    }
+    
+    void CleanupWireframe()
+    {
+        if (wireframeRoot != null)
+        {
+            if (Application.isPlaying)
+                Destroy(wireframeRoot);
+            else
+                DestroyImmediate(wireframeRoot);
+            wireframeRoot = null;
+        }
+        edgeLineRenderers.Clear();
+    }
+    
+    void CleanupVertexLabels()
+    {
+        foreach (var labelObj in vertexLabelObjects.Values)
+        {
+            if (labelObj != null)
+            {
+                if (Application.isPlaying)
+                    Destroy(labelObj);
+                else
+                    DestroyImmediate(labelObj);
+            }
+        }
+        vertexLabelObjects.Clear();
     }
 }
 
