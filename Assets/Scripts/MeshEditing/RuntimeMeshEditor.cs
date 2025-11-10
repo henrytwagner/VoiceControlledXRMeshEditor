@@ -369,14 +369,40 @@ public class RuntimeMeshEditor : MonoBehaviour
             newMode = TransformMode.Vertices;
         }
         
-        if (newMode != currentTransformMode)
-        {
-            currentTransformMode = newMode;
-            Deselect(); // Clear vertex selection when switching modes
-            isDraggingTransform = false;
-            
-            // Mode switched successfully
-        }
+        ApplyTransformModeChange(newMode);
+    }
+
+    void ApplyTransformModeChange(TransformMode newMode)
+    {
+        if (newMode == currentTransformMode)
+            return;
+
+        currentTransformMode = newMode;
+        Deselect(); // Clear vertex selection when switching modes
+        isDraggingTransform = false;
+    }
+
+    public void SetVertexMode()
+    {
+        ApplyTransformModeChange(TransformMode.Vertices);
+    }
+
+    public void ToggleTranslateMode()
+    {
+        TransformMode newMode = (currentTransformMode == TransformMode.Translate) ? TransformMode.Vertices : TransformMode.Translate;
+        ApplyTransformModeChange(newMode);
+    }
+
+    public void ToggleRotateMode()
+    {
+        TransformMode newMode = (currentTransformMode == TransformMode.Rotate) ? TransformMode.Vertices : TransformMode.Rotate;
+        ApplyTransformModeChange(newMode);
+    }
+
+    public void ToggleScaleMode()
+    {
+        TransformMode newMode = (currentTransformMode == TransformMode.Scale) ? TransformMode.Vertices : TransformMode.Scale;
+        ApplyTransformModeChange(newMode);
     }
     
     void HandleLabelToggle()
