@@ -24,7 +24,7 @@ public class VoiceCommandVLMClient : MonoBehaviour
 
     [Tooltip("Amount of silence (seconds) before sending the captured clip.")]
     [Range(0.2f, 5f)]
-    public float silenceTimeout = 1.2f;
+    public float silenceTimeout = 5f;
 
     [Tooltip("Size of the RMS sampling window (number of audio samples).")]
     public int sampleWindow = 1024;
