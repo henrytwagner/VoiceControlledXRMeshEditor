@@ -85,3 +85,4 @@ crashlytics-build.properties
 # JetBrains Rider
 .idea/
 
+Tools/VLMService/.venv/

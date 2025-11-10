@@ -93,24 +93,47 @@ public class VoiceCommandProcessor : MonoBehaviour
     }
     
     /// <summary>
+    /// Entry point for already-parsed commands (e.g. VLM client integration)
+    /// </summary>
+    public CommandResult ProcessCommand(MeshCommand command)
+    {
+        if (command == null)
+            return new CommandResult(false, "Null command payload");
+
+        if (string.IsNullOrEmpty(command.command))
+            return new CommandResult(false, "Command field is empty");
+
+        if (logCommands)
+            Debug.Log($"[VoiceCommand] Processing (direct): {command.command}");
+
+        return ExecuteCommand(command);
+    }
+    
+    /// <summary>
     /// Execute a parsed command
     /// </summary>
     CommandResult ExecuteCommand(MeshCommand command)
     {
-        // Get the target mesh for this command
-        EditableMesh mesh = GetTargetMesh(command);
-        
-        if (mesh == null)
-            return new CommandResult(false, command.object_name != null ? 
-                $"Object '{command.object_name}' not found" : 
-                "No target mesh assigned or selected");
-        
-        // Temporarily set targetMesh for legacy command methods
+        string commandName = command.command.ToLower();
+        bool requiresTarget = CommandRequiresTarget(commandName);
+
         EditableMesh previousTarget = targetMesh;
-        targetMesh = mesh;
-        
+        if (requiresTarget)
+        {
+            // Get the target mesh for this command
+            EditableMesh mesh = GetTargetMesh(command);
+
+            if (mesh == null)
+                return new CommandResult(false, command.object_name != null ?
+                    $"Object '{command.object_name}' not found" :
+                    "No target mesh assigned or selected");
+
+            // Temporarily set targetMesh for legacy command methods
+            targetMesh = mesh;
+        }
+
         CommandResult result;
-        switch (command.command.ToLower())
+        switch (commandName)
         {
             case "move_vertex":
                 result = MoveVertex(command);
@@ -194,8 +217,31 @@ public class VoiceCommandProcessor : MonoBehaviour
         }
         
         // Restore previous target
-        targetMesh = previousTarget;
+        if (requiresTarget)
+            targetMesh = previousTarget;
         return result;
+    }
+
+    bool CommandRequiresTarget(string commandName)
+    {
+        switch (commandName)
+        {
+            case "move_vertex":
+            case "move_vertices":
+            case "set_vertex":
+            case "translate_mesh":
+            case "rotate_mesh":
+            case "scale_mesh":
+            case "reset_vertex":
+            case "rebuild_mesh":
+            case "get_vertex_position":
+            case "get_all_vertices":
+            case "get_mesh_transform":
+            case "set_mode":
+                return true;
+            default:
+                return false;
+        }
     }
     
     /// <summary>
