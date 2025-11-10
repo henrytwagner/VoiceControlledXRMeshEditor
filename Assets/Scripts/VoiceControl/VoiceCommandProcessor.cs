@@ -158,6 +158,10 @@ public class VoiceCommandProcessor : MonoBehaviour
             case "remove_object":
                 result = DeleteObject(command);
                 break;
+            case "rename_object":
+            case "rename":
+                result = RenameObject(command);
+                break;
             case "select_object":
                 result = SelectObject(command);
                 break;
@@ -582,8 +586,8 @@ public class VoiceCommandProcessor : MonoBehaviour
     }
     
     /// <summary>
-    /// Delete an object
-    /// JSON: {"command":"delete_object", "object_name":"Cube_1"}
+    /// Delete an object by name
+    /// JSON: {"command":"delete_object", "object_name":"Cube_2"}
     /// </summary>
     CommandResult DeleteObject(MeshCommand cmd)
     {
@@ -602,6 +606,31 @@ public class VoiceCommandProcessor : MonoBehaviour
                 string name = mesh.gameObject.name;
                 Destroy(mesh.gameObject);
                 return new CommandResult(true, $"Deleted {name}");
+            }
+        }
+        
+        return new CommandResult(false, $"Object '{cmd.object_name}' not found");
+    }
+    
+    /// <summary>
+    /// Rename an object
+    /// JSON: {"command":"rename_object", "object_name":"Cube_1", "new_name":"Cube_2"}
+    /// </summary>
+    CommandResult RenameObject(MeshCommand cmd)
+    {
+        if (string.IsNullOrEmpty(cmd.object_name))
+            return new CommandResult(false, "No object_name specified");
+        if (string.IsNullOrEmpty(cmd.new_name))
+            return new CommandResult(false, "No new_name specified");
+        
+        EditableMesh[] allMeshes = FindObjectsByType<EditableMesh>(FindObjectsSortMode.None);
+        foreach (EditableMesh mesh in allMeshes)
+        {
+            if (mesh.gameObject.name == cmd.object_name)
+            {
+                mesh.gameObject.name = cmd.new_name;
+                Debug.Log($"[VoiceCommand] Renamed object '{cmd.object_name}' to '{cmd.new_name}'");
+                return new CommandResult(true, $"Renamed {cmd.object_name} to {cmd.new_name}");
             }
         }
         
@@ -883,6 +912,7 @@ public class MeshCommand
     // Core
     public string command;              // Command type (e.g., "move_vertex")
     public string object_name;          // Optional: Name of object to target (e.g., "Cube_1")
+    public string new_name;             // Optional: New name for rename_object
     
     // Vertex operations
     public int vertex;                  // Single vertex index

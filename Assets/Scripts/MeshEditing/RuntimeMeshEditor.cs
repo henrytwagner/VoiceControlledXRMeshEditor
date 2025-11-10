@@ -42,7 +42,7 @@ public class RuntimeMeshEditor : MonoBehaviour
     [Header("Mesh Transformation")]
     [Tooltip("Keys to toggle transformation modes")]
     public KeyCode translateKey = KeyCode.Z;
-    public KeyCode rotateKey = KeyCode.X;
+    public KeyCode rotateKey = KeyCode.R;
     public KeyCode scaleKey = KeyCode.C;
     public Color transformModeColor = Color.green;
     public float rotationSensitivity = 0.5f;

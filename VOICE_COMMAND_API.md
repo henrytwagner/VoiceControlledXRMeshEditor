@@ -300,7 +300,34 @@ Programmatically select an object by name (highlights in UI).
 
 ---
 
-### 14. Set Mode
+### 14. Rename Object
+
+Rename an object either by specifying its current name or referencing the currently selected object.
+
+**Voice Example**: "Rename Cube_1 to MainCube"
+
+**JSON Output**:
+```json
+{
+    "command": "rename_object",
+    "object_name": "Cube_1",
+    "new_name": "MainCube"
+}
+```
+
+**Voice Example**: "Rename this object to SupportBeam" (object already selected)
+
+**JSON Output**:
+```json
+{
+    "command": "rename_object",
+    "new_name": "SupportBeam"
+}
+```
+
+---
+
+### 15. Set Mode
 
 Switch an object into `Object` or `Edit` mode (matching the in-game Tab behavior).
 
@@ -319,7 +346,7 @@ Omit `object_name` to affect the currently selected object.
 
 ---
 
-### 15. Move Camera
+### 16. Move Camera
 
 Move the desktop camera to a position or by an offset.
 
@@ -343,7 +370,7 @@ Move the desktop camera to a position or by an offset.
 
 ---
 
-### 16. Toggle Transform Panel
+### 17. Toggle Transform Panel
 
 Show or hide the Blender-style transform panel.
 
@@ -361,7 +388,22 @@ Omit `state` to toggle.
 
 ---
 
-### 17. Toggle Orientation Gizmo
+### 18. Toggle Labels (Vertex/Object)
+```
+{"command":"toggle_labels"}
+```
+
+**Optional:**
+```
+{"command":"toggle_labels", "state":"on"}
+{"command":"toggle_labels", "state":"off"}
+```
+
+Toggles both vertex and object labels in the scene. When `state` is supplied, the labels are explicitly enabled or disabled.
+
+---
+
+### 19. Toggle Orientation Gizmo
 
 Show or hide the orientation gizmo overlay.
 
@@ -377,7 +419,7 @@ Show or hide the orientation gizmo overlay.
 
 ---
 
-### 18. Toggle Mouse Look
+### 20. Toggle Mouse Look
 
 Report or force the mouse-look (crosshair) state.
 
@@ -395,7 +437,7 @@ Omit `state` to simply toggle.
 
 ---
 
-### 19. Clear All Objects
+### 21. Clear All Objects
 
 Remove every spawned object.
 

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -11,6 +12,7 @@ public class TopMenuBar : MonoBehaviour
 {
     [Header("References")]
     public MeshSpawner meshSpawner;
+    public TransformPersistenceManager persistenceManager;
     
     [Header("Menu Style")]
     public float menuHeight = 30f;
@@ -26,7 +28,13 @@ public class TopMenuBar : MonoBehaviour
     
     private bool showAddDropdown = false;
     private Rect addButtonRect;
-    
+
+    private bool showSaveDialog = false;
+    private bool showLoadDialog = false;
+    private string saveSceneName = "MyScene";
+    private Vector2 loadScrollPos = Vector2.zero;
+    private List<string> savedScenes = new List<string>();
+
     private GUIStyle menuBarStyle;
     private GUIStyle buttonStyle;
     private GUIStyle dropdownStyle;
@@ -36,6 +44,11 @@ public class TopMenuBar : MonoBehaviour
     {
         if (meshSpawner == null)
             meshSpawner = FindAnyObjectByType<MeshSpawner>();
+
+        if (persistenceManager == null)
+            persistenceManager = FindAnyObjectByType<TransformPersistenceManager>();
+
+        RefreshSavedScenes();
     }
     
     void Update()
@@ -108,9 +121,10 @@ public class TopMenuBar : MonoBehaviour
         float buttonHeight = menuHeight - 6f;
         float yPos = 3f;
         float spacing = 5f;
+        float saveButtonWidth = buttonWidth + 20f;
         
         // Calculate actual menu width based on buttons
-        float calculatedWidth = xPos + addButtonWidth + spacing + buttonWidth + 10f; // 10f for right margin
+        float calculatedWidth = xPos + addButtonWidth + spacing + buttonWidth + spacing + saveButtonWidth + spacing + (buttonWidth + 40f) + 10f; // account for all buttons
         
         // Draw menu bar background - only in left corner
         GUI.Box(new Rect(0, 0, calculatedWidth, menuHeight), "", menuBarStyle);
@@ -131,12 +145,65 @@ public class TopMenuBar : MonoBehaviour
                 meshSpawner.ClearAll();
             showAddDropdown = false;
         }
+
+        xPos += buttonWidth + spacing;
+
+        // Save Scene split button
+        float arrowWidth = 24f;
+        Rect saveMainRect = new Rect(xPos, yPos, buttonWidth + 20f - arrowWidth, buttonHeight);
+        Rect saveArrowRect = new Rect(xPos + buttonWidth + 20f - arrowWidth, yPos, arrowWidth, buttonHeight);
+
+        if (GUI.Button(saveMainRect, "Save Scene", buttonStyle))
+        {
+            if (persistenceManager != null && !string.IsNullOrEmpty(persistenceManager.CurrentSceneName))
+            {
+                persistenceManager.SaveTransforms();
+                Debug.Log($"[TopMenuBar] Scene '{persistenceManager.CurrentSceneName}' saved.");
+                RefreshSavedScenes();
+            }
+            else
+            {
+                showSaveDialog = true;
+                showLoadDialog = false;
+                saveSceneName = persistenceManager != null && !string.IsNullOrEmpty(persistenceManager.CurrentSceneName)
+                    ? persistenceManager.CurrentSceneName
+                    : System.DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+            }
+        }
+
+        if (GUI.Button(saveArrowRect, "▼", buttonStyle))
+        {
+            showSaveDialog = !showSaveDialog;
+            if (showSaveDialog)
+            {
+                showLoadDialog = false;
+                saveSceneName = persistenceManager != null && !string.IsNullOrEmpty(persistenceManager.CurrentSceneName)
+                    ? persistenceManager.CurrentSceneName
+                    : System.DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+            }
+        }
+
+        xPos += buttonWidth + 20f + spacing;
+
+        // Load Saved Scene button
+        if (GUI.Button(new Rect(xPos, yPos, buttonWidth + 40f, buttonHeight), "Load Saved Scene", buttonStyle))
+        {
+            showLoadDialog = !showLoadDialog;
+            showSaveDialog = false;
+            RefreshSavedScenes();
+        }
         
         // Draw dropdown if open
         if (showAddDropdown)
         {
             DrawAddDropdown();
         }
+
+        if (showSaveDialog)
+            DrawSaveDialog();
+
+        if (showLoadDialog)
+            DrawLoadDialog();
         
         // Close dropdown if clicking elsewhere
         if (Event.current.type == EventType.MouseDown && !addButtonRect.Contains(Event.current.mousePosition))
@@ -210,6 +277,101 @@ public class TopMenuBar : MonoBehaviour
                 selector.AddSelectableObject(newMesh.gameObject.name);
             }
         }
+    }
+
+    void DrawSaveDialog()
+    {
+        float dialogWidth = 260f;
+        float dialogHeight = 140f;
+        Rect dialogRect = new Rect(10f, menuHeight + 10f, dialogWidth, dialogHeight);
+
+        GUI.Box(dialogRect, "", dropdownStyle);
+        GUILayout.BeginArea(new Rect(dialogRect.x + 10f, dialogRect.y + 10f, dialogRect.width - 20f, dialogRect.height - 20f));
+
+        GUILayout.Label("Save Scene", GUI.skin.label);
+        GUILayout.Space(5f);
+        GUILayout.Label("File Name:");
+        saveSceneName = GUILayout.TextField(saveSceneName);
+        GUILayout.Space(10f);
+
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Save"))
+        {
+            if (persistenceManager != null)
+            {
+                persistenceManager.SaveTransforms(saveSceneName);
+                RefreshSavedScenes();
+            }
+            else
+            {
+                Debug.LogWarning("[TopMenuBar] No TransformPersistenceManager found in scene.");
+            }
+            showSaveDialog = false;
+        }
+        if (GUILayout.Button("Cancel"))
+        {
+            showSaveDialog = false;
+        }
+        GUILayout.EndHorizontal();
+
+        GUILayout.EndArea();
+    }
+
+    void DrawLoadDialog()
+    {
+        float dialogWidth = 260f;
+        float dialogHeight = 220f;
+        Rect dialogRect = new Rect(10f, menuHeight + 10f, dialogWidth, dialogHeight);
+
+        GUI.Box(dialogRect, "", dropdownStyle);
+        GUILayout.BeginArea(new Rect(dialogRect.x + 10f, dialogRect.y + 10f, dialogRect.width - 20f, dialogRect.height - 20f));
+
+        GUILayout.Label("Load Saved Scene", GUI.skin.label);
+        GUILayout.Space(5f);
+
+        if (savedScenes.Count == 0)
+        {
+            GUILayout.Label("No saved scenes found.");
+        }
+        else
+        {
+            loadScrollPos = GUILayout.BeginScrollView(loadScrollPos, false, true);
+            foreach (string sceneName in savedScenes)
+            {
+                if (GUILayout.Button(sceneName))
+                {
+                    if (meshSpawner != null)
+                        meshSpawner.ClearAll();
+
+                    if (persistenceManager != null)
+                    {
+                        persistenceManager.LoadTransformsFromFile(sceneName);
+                    }
+                    else
+                    {
+                        Debug.LogWarning("[TopMenuBar] No TransformPersistenceManager found in scene.");
+                    }
+                    showLoadDialog = false;
+                }
+            }
+            GUILayout.EndScrollView();
+        }
+
+        GUILayout.FlexibleSpace();
+        if (GUILayout.Button("Close"))
+        {
+            showLoadDialog = false;
+        }
+
+        GUILayout.EndArea();
+    }
+
+    void RefreshSavedScenes()
+    {
+        if (persistenceManager != null)
+            savedScenes = persistenceManager.GetSavedSceneNames();
+        else
+            savedScenes = new List<string>();
     }
     
     Texture2D MakeTex(int width, int height, Color col)
