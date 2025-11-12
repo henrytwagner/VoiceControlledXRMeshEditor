@@ -13,11 +13,11 @@ app = Flask(__name__)
 stt_model = whisper.load_model("base.en")
 executor = ThreadPoolExecutor(max_workers=2)
 
-# Ensure ffmpeg is available even when PATH is trimmed (e.g. from a venv shell)
-if shutil.which("ffmpeg") is None:
-    fallback_ffmpeg_dir = r"C:\Users\htwagner\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.0-essentials_build\bin"
-    if os.path.isdir(fallback_ffmpeg_dir):
-        os.environ["PATH"] = fallback_ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
+# # Ensure ffmpeg is available even when PATH is trimmed (e.g. from a venv shell)
+# if shutil.which("ffmpeg") is None:
+#     fallback_ffmpeg_dir = r"C:\Users\htwagner\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.0-essentials_build\bin"
+#     if os.path.isdir(fallback_ffmpeg_dir):
+#         os.environ["PATH"] = fallback_ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
 
 ALLOWED_COMMANDS = {
     "spawn_object",
@@ -61,9 +61,9 @@ def validate_payload(payload):
         return False, "Missing or invalid 'command' field."
 
     command_lower = command.lower()
-    command_lower, was_corrected = normalize_command(command_lower)
-    if was_corrected:
-        print(f"[VLM Service] Auto-corrected command '{command}' -> '{command_lower}'")
+    # command_lower, was_corrected = normalize_command(command_lower)
+    # if was_corrected:
+    #     print(f"[VLM Service] Auto-corrected command '{command}' -> '{command_lower}'")
 
     if command_lower not in ALLOWED_COMMANDS:
         return False, f"Command '{command}' is not in the allowed list."
@@ -121,46 +121,46 @@ def validate_payload(payload):
     return True, None
 
 
-def normalize_command(command):
-    if command in ALLOWED_COMMANDS:
-        return command, False
+# def normalize_command(command):
+#     if command in ALLOWED_COMMANDS:
+#         return command, False
 
-    best_match = None
-    best_distance = 3  # allow corrections up to distance 2
+#     best_match = None
+#     best_distance = 3  # allow corrections up to distance 2
 
-    for candidate in ALLOWED_COMMANDS:
-        distance = levenshtein_distance(command, candidate)
-        if distance < best_distance:
-            best_distance = distance
-            best_match = candidate
-            if distance == 1:
-                break
+#     for candidate in ALLOWED_COMMANDS:
+#         distance = levenshtein_distance(command, candidate)
+#         if distance < best_distance:
+#             best_distance = distance
+#             best_match = candidate
+#             if distance == 1:
+#                 break
 
-    if best_match is not None:
-        return best_match, True
+#     if best_match is not None:
+#         return best_match, True
 
-    return command, False
+#     return command, False
 
 
-def levenshtein_distance(a, b):
-    if a == b:
-        return 0
-    if len(a) == 0:
-        return len(b)
-    if len(b) == 0:
-        return len(a)
+# def levenshtein_distance(a, b):
+#     if a == b:
+#         return 0
+#     if len(a) == 0:
+#         return len(b)
+#     if len(b) == 0:
+#         return len(a)
 
-    previous_row = list(range(len(b) + 1))
-    for i, ca in enumerate(a, start=1):
-        current_row = [i]
-        for j, cb in enumerate(b, start=1):
-            insertions = previous_row[j] + 1
-            deletions = current_row[j - 1] + 1
-            substitutions = previous_row[j - 1] + (0 if ca == cb else 1)
-            current_row.append(min(insertions, deletions, substitutions))
-        previous_row = current_row
+#     previous_row = list(range(len(b) + 1))
+#     for i, ca in enumerate(a, start=1):
+#         current_row = [i]
+#         for j, cb in enumerate(b, start=1):
+#             insertions = previous_row[j] + 1
+#             deletions = current_row[j - 1] + 1
+#             substitutions = previous_row[j - 1] + (0 if ca == cb else 1)
+#             current_row.append(min(insertions, deletions, substitutions))
+#         previous_row = current_row
 
-    return previous_row[-1]
+#     return previous_row[-1]
 
 
 def request_with_validation(base_messages, max_attempts=2):
@@ -185,7 +185,7 @@ def request_with_validation(base_messages, max_attempts=2):
                     "repeat_penalty": 1.1,
                 },
             )
-            response = future.result(timeout=10.0)
+            response = future.result(timeout=30.0)
         except FuturesTimeoutError:
             error_message = "Ollama request failed: timeout"
             print(f"[VLM Service] {error_message}")
@@ -198,7 +198,7 @@ def request_with_validation(base_messages, max_attempts=2):
             break
         llm_output = response["message"]["content"].strip()
         last_output = llm_output
-        print(f"[VLM Service] Raw model output (truncated): {llm_output[:200]}{'...' if len(llm_output) > 200 else ''}")
+        print(f"[VLM Service] Raw model output: {llm_output}")
 
         try:
             payload = json.loads(llm_output)

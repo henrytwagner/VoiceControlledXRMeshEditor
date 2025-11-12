@@ -129,11 +129,13 @@ public class VoiceCommandVLMClient : MonoBehaviour
 
     private void OnEnable()
     {
+        Debug.Log("enabled!");
         StartMicrophone();
     }
 
     private void OnDisable()
     {
+        Debug.Log("disabled!");
         StopMicrophone();
     }
 

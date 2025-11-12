@@ -298,6 +298,7 @@ MonoBehaviour:
   features:
   - {fileID: 8487559348959976567}
   m_renderMode: 1
+  m_latencyOptimization: 0
   m_autoColorSubmissionMode: 1
   m_colorSubmissionModes:
     m_List: 00000000
@@ -586,6 +587,7 @@ MonoBehaviour:
   features:
   - {fileID: 7077444821019895077}
   m_renderMode: 1
+  m_latencyOptimization: 0
   m_autoColorSubmissionMode: 1
   m_colorSubmissionModes:
     m_List: 00000000
@@ -879,6 +881,7 @@ MonoBehaviour:
   features:
   - {fileID: 1232425734411198033}
   m_renderMode: 1
+  m_latencyOptimization: 0
   m_autoColorSubmissionMode: 1
   m_colorSubmissionModes:
     m_List: 00000000
@@ -1052,6 +1055,7 @@ MonoBehaviour:
   - {fileID: 8539227670001640548}
   - {fileID: -5901582635306253}
   m_renderMode: 1
+  m_latencyOptimization: 0
   m_autoColorSubmissionMode: 1
   m_colorSubmissionModes:
     m_List: 00000000
@@ -1173,6 +1177,7 @@ MonoBehaviour:
   - {fileID: -6230198921214746153}
   - {fileID: -746052863005154228}
   m_renderMode: 1
+  m_latencyOptimization: 0
   m_autoColorSubmissionMode: 1
   m_colorSubmissionModes:
     m_List: 00000000
@@ -1405,6 +1410,7 @@ MonoBehaviour:
   - {fileID: 1548467516872089568}
   - {fileID: 1940785323570898695}
   m_renderMode: 1
+  m_latencyOptimization: 0
   m_autoColorSubmissionMode: 1
   m_colorSubmissionModes:
     m_List: 00000000
@@ -2184,6 +2190,7 @@ MonoBehaviour:
   features:
   - {fileID: 3150671951373486854}
   m_renderMode: 1
+  m_latencyOptimization: 0
   m_autoColorSubmissionMode: 1
   m_colorSubmissionModes:
     m_List: 00000000
