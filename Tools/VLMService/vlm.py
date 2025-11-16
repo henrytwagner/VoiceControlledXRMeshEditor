@@ -22,18 +22,18 @@ executor = ThreadPoolExecutor(max_workers=2)
 ALLOWED_COMMANDS = {
     "spawn_object",
     "delete_object",
-    "rename_object",
-    "select_object",
+    # "rename_object",
+    # "select_object",
     "translate_mesh",
     "rotate_mesh",
-    "scale_mesh",
-    "move_vertex",
-    "move_vertices",
-    "set_vertex",
-    "reset_vertex",
-    "set_mode",
-    "toggle_labels",
-    "clear_all",
+    # "scale_mesh",
+    # "move_vertex",
+    # "move_vertices",
+    # "set_vertex",
+    # "reset_vertex",
+    # "set_mode",
+    # "toggle_labels",
+    # "clear_all",
 }
 
 
@@ -76,47 +76,47 @@ def validate_payload(payload):
     elif command_lower == "delete_object":
         if not payload.get("object_name"):
             return False, "delete_object requires 'object_name'."
-    elif command_lower == "rename_object":
-        if not payload.get("object_name") or not payload.get("new_name"):
-            return False, "rename_object requires 'object_name' and 'new_name'."
-    elif command_lower == "select_object":
-        if not payload.get("object_name"):
-            return False, "select_object requires 'object_name'."
+    # elif command_lower == "rename_object":
+    #     if not payload.get("object_name") or not payload.get("new_name"):
+    #         return False, "rename_object requires 'object_name' and 'new_name'."
+    # elif command_lower == "select_object":
+    #     if not payload.get("object_name"):
+    #         return False, "select_object requires 'object_name'."
     elif command_lower == "translate_mesh":
         if not (is_vector(payload.get("offset")) or is_vector(payload.get("position"))):
             return False, "translate_mesh requires 'offset' or 'position' vector."
     elif command_lower == "rotate_mesh":
         if not is_vector(payload.get("rotation")):
             return False, "rotate_mesh requires 'rotation' vector."
-    elif command_lower == "scale_mesh":
-        has_scale = isinstance(payload.get("scale"), (int, float))
-        has_vector = is_vector(payload.get("scaleVector"))
-        if not (has_scale or has_vector):
-            return False, "scale_mesh requires 'scale' or 'scaleVector'."
-    elif command_lower == "move_vertex":
-        if not isinstance(payload.get("vertex"), int):
-            return False, "move_vertex requires 'vertex' index."
-        if not is_vector(payload.get("offset")):
-            return False, "move_vertex requires 'offset' vector."
-    elif command_lower == "move_vertices":
-        vertices = payload.get("vertices")
-        if not isinstance(vertices, list) or len(vertices) == 0:
-            return False, "move_vertices requires non-empty 'vertices' array."
-        if not all(isinstance(v, int) for v in vertices):
-            return False, "move_vertices 'vertices' must contain integers."
-        if not is_vector(payload.get("offset")):
-            return False, "move_vertices requires 'offset' vector."
-    elif command_lower == "set_vertex":
-        if not isinstance(payload.get("vertex"), int):
-            return False, "set_vertex requires 'vertex' index."
-        if not is_vector(payload.get("position")):
-            return False, "set_vertex requires 'position' vector."
-    elif command_lower == "reset_vertex":
-        if not isinstance(payload.get("vertex"), int):
-            return False, "reset_vertex requires 'vertex' index."
-    elif command_lower == "set_mode":
-        if not payload.get("mode"):
-            return False, "set_mode requires 'mode'."
+    # elif command_lower == "scale_mesh":
+    #     has_scale = isinstance(payload.get("scale"), (int, float))
+    #     has_vector = is_vector(payload.get("scaleVector"))
+    #     if not (has_scale or has_vector):
+    #         return False, "scale_mesh requires 'scale' or 'scaleVector'."
+    # elif command_lower == "move_vertex":
+    #     if not isinstance(payload.get("vertex"), int):
+    #         return False, "move_vertex requires 'vertex' index."
+    #     if not is_vector(payload.get("offset")):
+    #         return False, "move_vertex requires 'offset' vector."
+    # elif command_lower == "move_vertices":
+    #     vertices = payload.get("vertices")
+    #     if not isinstance(vertices, list) or len(vertices) == 0:
+    #         return False, "move_vertices requires non-empty 'vertices' array."
+    #     if not all(isinstance(v, int) for v in vertices):
+    #         return False, "move_vertices 'vertices' must contain integers."
+    #     if not is_vector(payload.get("offset")):
+    #         return False, "move_vertices requires 'offset' vector."
+    # elif command_lower == "set_vertex":
+    #     if not isinstance(payload.get("vertex"), int):
+    #         return False, "set_vertex requires 'vertex' index."
+    #     if not is_vector(payload.get("position")):
+    #         return False, "set_vertex requires 'position' vector."
+    # elif command_lower == "reset_vertex":
+    #     if not isinstance(payload.get("vertex"), int):
+    #         return False, "reset_vertex requires 'vertex' index."
+    # elif command_lower == "set_mode":
+    #     if not payload.get("mode"):
+    #         return False, "set_mode requires 'mode'."
 
     return True, None
 
@@ -246,67 +246,103 @@ def request_with_validation(base_messages, max_attempts=2):
     return None, last_output, False, error_message or "Model response was not valid after retries"
 
 
+# default_text = """
+# You are a Unity scene editing assistant. Use the provided screenshot context and transcribed voice command to return a single JSON object that matches this schema. Output JSON only, with double quotes, no comments, no markdown fences, no extra keys.
+
+# Schema (omit any fields that are not needed):
+# {
+#   "command": string,                   // required; use lower_snake_case
+#   "object_name": string,               // optional
+#   "new_name": string,                  // optional
+#   "vertex": int,
+#   "vertices": [int, ...],
+#   "offset": {"x": float, "y": float, "z": float},
+#   "position": {"x": float, "y": float, "z": float},
+#   "rotation": {"x": float, "y": float, "z": float},
+#   "scale": float,
+#   "scaleVector": {"x": float, "y": float, "z": float},
+#   "primitive_type": string,            // Cube | Sphere | Cylinder | Capsule | Plane
+#   "mode": string,                      // Object | Edit
+#   "state": string                      // on/off/true/false (for toggles)
+# }
+
+# Valid command values (exactly one of these):
+# - "spawn_object"        (requires primitive_type)
+# - "delete_object"       (requires object_name)
+# - "rename_object"       (requires object_name, new_name)
+# - "select_object"       (requires object_name)
+# - "translate_mesh"      (requires offset OR position)
+# - "rotate_mesh"         (requires rotation)
+# - "scale_mesh"          (requires scale OR scaleVector)
+# - "move_vertex"         (requires vertex, offset)
+# - "move_vertices"       (requires vertices array, offset)
+# - "set_vertex"          (requires vertex, position)
+# - "reset_vertex"        (requires vertex)
+# - "set_mode"            (requires mode; include object_name if targeting a specific object)
+# - "toggle_labels"       (optional state field to force on/off)
+# - "clear_all"
+
+# If the request cannot be mapped to one of the commands above, respond instead with:
+# {"command":"unknown","reason":"<brief explanation>"}   // reason is short plain text
+
+# Rules:
+# - Do not invent command names or additional fields.
+# - Command names must match the spellings above exactly. Do not output variations such as "translate_messh" or "scale_mash".
+# - Keep numbers in meters (convert centimetres to metres: 1 cm = 0.01).
+# - Use explicit object names only when the user says them; otherwise omit object_name.
+# - Final answer must be valid JSON, nothing else.
+# - Interpret spatial phrases relative to the provided context:
+#   * "left/right" → use the camera_right vector (left = -camera_right, right = +camera_right).
+#   * "forward/back" → use camera_forward (forward = +camera_forward, back = -camera_forward).
+#   * "up/down"/"above/below" → use camera_up (up/above = +camera_up, down/below = -camera_up).
+#   * Refer to selected object axes (selected_forward/right/up) if the instruction is explicitly object-relative.
+#   * When a distance like "one meter" or "50 centimetres" is mentioned, convert to metres and apply along the resolved direction vector.
+#   * If the voice command lacks distance but the direction is clear, prefer a default value of 1.0 metre unless the context suggests otherwise.
+#   * If ambiguity remains after using the context, request clarification by returning {"command":"unknown","reason":"need clarification"}.
+#   * Do not misspell command names (e.g. "translate_mesh" not "translate_messh", "scale_mesh" not "scale_mash").
+#   * Do not include ellipses or placeholder tokens (no "..." values); every field must contain an explicit value.
+
+
+# Examples:
+# {"command":"translate_mesh","object_name":"Cube_A","position":{"x":1.5,"y":0.0,"z":-2.0}}
+# {"command":"unknown","reason":"No actionable instruction detected"}
+# """
+
 default_text = """
-You are a Unity scene editing assistant. Use the provided screenshot context and transcribed voice command to return a single JSON object that matches this schema. Output JSON only, with double quotes, no comments, no markdown fences, no extra keys.
+You are a Unity scene editing assistant. Use the provided screenshot context and transcribed voice command to return a single JSON object that matches this schema. OUTPUT A SINGLE JSON ONLY. NOTHING ELSE!!!
 
 Schema (omit any fields that are not needed):
 {
   "command": string,                   // required; use lower_snake_case
-  "object_name": string,               // optional
-  "new_name": string,                  // optional
-  "vertex": int,
-  "vertices": [int, ...],
+  "object_name": string,               
   "offset": {"x": float, "y": float, "z": float},
   "position": {"x": float, "y": float, "z": float},
   "rotation": {"x": float, "y": float, "z": float},
-  "scale": float,
-  "scaleVector": {"x": float, "y": float, "z": float},
   "primitive_type": string,            // Cube | Sphere | Cylinder | Capsule | Plane
-  "mode": string,                      // Object | Edit
-  "state": string                      // on/off/true/false (for toggles)
 }
 
 Valid command values (exactly one of these):
 - "spawn_object"        (requires primitive_type)
 - "delete_object"       (requires object_name)
-- "rename_object"       (requires object_name, new_name)
-- "select_object"       (requires object_name)
 - "translate_mesh"      (requires offset OR position)
 - "rotate_mesh"         (requires rotation)
-- "scale_mesh"          (requires scale OR scaleVector)
-- "move_vertex"         (requires vertex, offset)
-- "move_vertices"       (requires vertices array, offset)
-- "set_vertex"          (requires vertex, position)
-- "reset_vertex"        (requires vertex)
-- "set_mode"            (requires mode; include object_name if targeting a specific object)
-- "toggle_labels"       (optional state field to force on/off)
-- "clear_all"
 
 If the request cannot be mapped to one of the commands above, respond instead with:
 {"command":"unknown","reason":"<brief explanation>"}   // reason is short plain text
 
 Rules:
 - Do not invent command names or additional fields.
-- Command names must match the spellings above exactly. Do not output variations such as "translate_messh" or "scale_mash".
+- Command names must match the spellings above exactly. Do not output variations such as "translate_messh" or "rotate_mash".
 - Keep numbers in meters (convert centimetres to metres: 1 cm = 0.01).
-- Use explicit object names only when the user says them; otherwise omit object_name.
-- Final answer must be valid JSON, nothing else.
-- Interpret spatial phrases relative to the provided context:
-  * "left/right" → use the camera_right vector (left = -camera_right, right = +camera_right).
-  * "forward/back" → use camera_forward (forward = +camera_forward, back = -camera_forward).
-  * "up/down"/"above/below" → use camera_up (up/above = +camera_up, down/below = -camera_up).
-  * Refer to selected object axes (selected_forward/right/up) if the instruction is explicitly object-relative.
-  * When a distance like "one meter" or "50 centimetres" is mentioned, convert to metres and apply along the resolved direction vector.
-  * If the voice command lacks distance but the direction is clear, prefer a default value of 1.0 metre unless the context suggests otherwise.
-  * If ambiguity remains after using the context, request clarification by returning {"command":"unknown","reason":"need clarification"}.
-  * Do not misspell command names (e.g. "translate_mesh" not "translate_messh", "scale_mesh" not "scale_mash").
-  * Do not include ellipses or placeholder tokens (no "..." values); every field must contain an explicit value.
+- Final answer must be valid JSON, nothing else!!!
 
 
 Examples:
 {"command":"translate_mesh","object_name":"Cube_A","position":{"x":1.5,"y":0.0,"z":-2.0}}
 {"command":"unknown","reason":"No actionable instruction detected"}
 """
+
+chat_history = ""
 
 @app.route("/process", methods=["POST"])
 def process_input():
@@ -337,7 +373,9 @@ def process_input():
         context_json = json.dumps(context, indent=2)
         context_block = f"Context:\n{context_json}\n\n"
 
-    full_prompt = f"{default_text}\n\n{context_block}User request:\n{voice_command_text}"
+    full_prompt = f"{default_text}\n\n{context_block}\nUser request:\n{voice_command_text}\n\nChat History:{chat_history}"
+
+    chat_history += f"Question: {voice_command_text}\n"
 
     messages = [
         {
@@ -352,6 +390,8 @@ def process_input():
         del messages[0]["images"]
 
     command_payload, llm_output, success, error = request_with_validation(messages)
+
+    chat_history += f"Response: {llm_output}\n"
 
     return jsonify(
         {
