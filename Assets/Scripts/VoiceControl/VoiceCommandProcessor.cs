@@ -612,15 +612,18 @@ public class VoiceCommandProcessor : MonoBehaviour
         MeshSpawner spawner = EnsureMeshSpawner();
         if (spawner == null)
             return new CommandResult(false, "No MeshSpawner found in scene");
-        
+
         if (string.IsNullOrEmpty(cmd.primitive_type))
             return new CommandResult(false, "No primitive_type specified");
+            
+        if (string.IsNullOrEmpty(cmd.object_name))
+            return new CommandResult(false, "No object_name specified");
         
         PrimitiveType primitiveType;
         if (!System.Enum.TryParse(cmd.primitive_type, true, out primitiveType))
             return new CommandResult(false, $"Invalid primitive type '{cmd.primitive_type}'. Use: Cube, Sphere, Cylinder, Capsule, or Plane");
         
-        EditableMesh newMesh = spawner.SpawnPrimitive(primitiveType);
+        EditableMesh newMesh = spawner.SpawnPrimitive(primitiveType, cmd.object_name);
         
         if (newMesh != null)
         {

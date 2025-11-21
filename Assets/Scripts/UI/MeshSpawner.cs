@@ -54,7 +54,7 @@ public class MeshSpawner : MonoBehaviour
     /// <summary>
     /// Spawn a primitive mesh
     /// </summary>
-    public EditableMesh SpawnPrimitive(PrimitiveType primitiveType)
+    public EditableMesh SpawnPrimitive(PrimitiveType primitiveType, string object_name = "Cube_1", Vector3 position = default, Vector3 rotation = default)
     {
         Mesh mesh = GetPrimitiveMesh(primitiveType);
         if (mesh == null)
@@ -63,13 +63,13 @@ public class MeshSpawner : MonoBehaviour
             return null;
         }
         
-        return SpawnMesh(mesh, primitiveType.ToString());
+        return SpawnMesh(mesh, object_name, position, rotation);
     }
     
     /// <summary>
     /// Spawn a custom mesh
     /// </summary>
-    public EditableMesh SpawnMesh(Mesh mesh, string objectName = "EditableMesh")
+    public EditableMesh SpawnMesh(Mesh mesh, string objectName, Vector3 position, Vector3 rotation)
     {
         GameObject newObj;
         
@@ -86,13 +86,12 @@ public class MeshSpawner : MonoBehaviour
         }
         
         // Setup object
-        spawnCounter++;
-        newObj.name = $"{objectName}_{spawnCounter}";
+        newObj.name = objectName;
         
         // Force spawn at origin (0, 0, 0) - clear parent and set position
         newObj.transform.SetParent(null);
-        newObj.transform.position = spawnPosition;
-        newObj.transform.rotation = Quaternion.identity;
+        newObj.transform.position = position;
+        newObj.transform.rotation = Quaternion.Euler(rotation);
         newObj.transform.localScale = Vector3.one;
         
         // Configure EditableMesh
