@@ -258,7 +258,7 @@ Schema (omit any fields that are not needed):
   "vertices": [int, ...],
   "offset": {"x": float, "y": float, "z": float},
   "position": {"x": float, "y": float, "z": float},
-  "rotation": {"x": float, "y": float, "z": float},
+  "rotation": {"x": float, "y": float, "z": float}, // in DEGREES
   "scale": float,
   "scaleVector": {"x": float, "y": float, "z": float},
   "primitive_type": string,            // Cube | Sphere | Cylinder | Capsule | Plane
@@ -287,7 +287,6 @@ If the request cannot be mapped to one of the commands above, respond instead wi
 
 Rules:
 - Do not invent command names or additional fields.
-- Command names must match the spellings above exactly. Do not output variations such as "translate_messh" or "scale_mash".
 - Keep numbers in meters (convert centimetres to metres: 1 cm = 0.01).
 - Use explicit object names only when the user says them; otherwise omit object_name.
 - Final answer must be valid JSON, nothing else.
@@ -299,7 +298,6 @@ Rules:
   * When a distance like "one meter" or "50 centimetres" is mentioned, convert to metres and apply along the resolved direction vector.
   * If the voice command lacks distance but the direction is clear, prefer a default value of 1.0 metre unless the context suggests otherwise.
   * If ambiguity remains after using the context, request clarification by returning {"command":"unknown","reason":"need clarification"}.
-  * Do not misspell command names (e.g. "translate_mesh" not "translate_messh", "scale_mesh" not "scale_mash").
   * Do not include ellipses or placeholder tokens (no "..." values); every field must contain an explicit value.
 
 

@@ -432,7 +432,7 @@ public class VoiceCommandProcessor : MonoBehaviour
     /// </summary>
     CommandResult TranslateMesh(MeshCommand cmd)
     {
-        targetMesh.transform.position += cmd.offset;
+        targetMesh.transform.position = cmd.position;
         return new CommandResult(true, $"Translated mesh by {cmd.offset}");
     }
     
